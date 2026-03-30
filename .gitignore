@@ -1,17 +1,8 @@
-# Binary
-cpm
+# Build output
+dist/
 
-# Go
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-
-# Dependency directories
-vendor/
+# Dependencies
+node_modules/
 
 # IDE
 .idea/

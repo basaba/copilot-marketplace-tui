@@ -2,95 +2,76 @@
 
 A rich terminal UI for managing GitHub Copilot CLI plugins. Browse marketplaces, install/uninstall plugins, enable/disable, update, and configure — all from a beautiful TUI.
 
+Built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs) and TypeScript.
+
 ## Features
 
 - 📦 **Dashboard** — overview of installed plugins, quick actions
 - 🔍 **Marketplace Browser** — browse and search registered marketplaces, install plugins
 - 📋 **Installed Plugins** — manage installed plugins with search, enable/disable, uninstall, update
-- 📄 **Plugin Details** — view full plugin metadata (skills, agents, hooks, MCP servers)
+- 📄 **Plugin Details** — view full plugin metadata
 - ⚙️ **Settings** — manage marketplace registrations (add/remove)
 - 🎨 **GitHub Dark Theme** — cohesive dark color scheme inspired by GitHub
 - ⌨️ **Keyboard-Driven** — vim-style navigation (j/k), tab switching, search (/)
 
 ## Prerequisites
 
-- Go 1.18+
-- GitHub Copilot CLI installed and configured (`copilot` binary in PATH)
+- Node.js 18+
+- GitHub Copilot CLI installed and configured (`copilot` binary in PATH) — not needed for demo mode
 
-## Installation
-
-### From source
+## Quick Start
 
 ```bash
-git clone <repo-url>
-cd copilot-plugin-marketplace
-make build
-# Binary is at ./cpm
+npm install
+npm start -- --demo    # Run in demo mode with sample data
 ```
 
-### Install to PATH
+## Development
 
 ```bash
-make install
-```
-
-## Usage
-
-```bash
-# Launch TUI (uses real copilot CLI)
-./cpm
-
-# Launch in demo mode (sample data, no copilot CLI needed)
-./cpm --demo
+npm run build          # Compile TypeScript
+npm start              # Run (real copilot CLI integration)
+npm start -- --demo    # Run with demo data
 ```
 
 ## Keybindings
 
-| Key              | Action                 |
-| ---------------- | ---------------------- |
-| `tab`/`shift+tab`| Switch between views   |
-| `↑/k` / `↓/j`   | Navigate up/down       |
-| `enter`          | Select / view details  |
-| `/`              | Search/filter          |
-| `esc`            | Back / cancel search   |
-| `i`              | Install plugin         |
-| `x`              | Uninstall plugin       |
-| `e`              | Enable plugin          |
-| `d`              | Disable plugin         |
-| `u`              | Update plugin          |
-| `U`              | Update all plugins     |
-| `r`              | Refresh data           |
-| `?`              | Toggle help            |
-| `q` / `Ctrl+C`  | Quit                   |
+| Key | Action |
+|-----|--------|
+| `tab` / `shift+tab` | Switch between screens |
+| `↑/k` / `↓/j` | Navigate lists |
+| `←/→` | Switch marketplace tabs |
+| `enter` | Select / view detail |
+| `/` | Search / filter |
+| `esc` | Exit search / go back |
+| `i` | Install plugin |
+| `e` / `d` | Enable / disable plugin |
+| `u` | Update plugin |
+| `x` | Uninstall / remove |
+| `q` | Quit |
 
 ## Architecture
 
 ```
-cmd/cpm/main.go              # Entry point
-internal/
-├── copilot/
-│   ├── types.go              # Data types (Plugin, Marketplace, etc.)
-│   ├── client.go             # CLI wrapper (shells out to `copilot plugin ...`)
-│   └── parser.go             # Parses CLI output into Go structs
-├── tui/
-│   ├── app.go                # Root Bubble Tea model, screen routing
-│   ├── theme/
-│   │   ├── styles.go         # Lip Gloss styles (GitHub dark theme)
-│   │   └── keys.go           # Global keybindings
-│   ├── components/
-│   │   ├── table.go          # Reusable table component
-│   │   ├── searchbar.go      # Search/filter input
-│   │   ├── statusbar.go      # Bottom status bar
-│   │   ├── confirm.go        # Confirmation dialog
-│   │   └── spinner.go        # Loading spinner
-│   └── views/
-│       ├── dashboard.go      # Home screen
-│       ├── installed.go      # Installed plugins list
-│       ├── marketplace.go    # Marketplace browser
-│       ├── detail.go         # Plugin detail view
-│       └── settings.go       # Marketplace management
-└── config/
-    └── config.go             # App configuration
+src/
+├── index.tsx              # CLI entry point
+├── App.tsx                # Root component, navigation, state
+├── types.ts               # TypeScript type definitions
+├── theme.ts               # GitHub dark theme colors
+├── components/
+│   ├── TabBar.tsx         # Top-level screen navigation
+│   ├── SearchBar.tsx      # Search/filter input
+│   ├── Table.tsx          # Navigable data table
+│   └── StatusBar.tsx      # Bottom help/status line
+├── views/
+│   ├── Dashboard.tsx      # Home screen with stats + quick actions
+│   ├── Installed.tsx      # Installed plugins list
+│   ├── Marketplace.tsx    # Marketplace browser with sub-tabs
+│   ├── Detail.tsx         # Plugin detail view
+│   └── Settings.tsx       # Marketplace management
+└── services/
+    ├── copilot.ts         # CLI wrapper (shells out to `copilot plugin ...`)
+    └── demo.ts            # Demo data generator
 ```
 
 ## How It Works
@@ -103,17 +84,15 @@ CPM wraps the existing `copilot plugin` CLI commands:
 - `copilot plugin update` — update plugins
 - `copilot plugin marketplace list/browse/add/remove` — manage marketplaces
 
-This ensures CPM stays in sync with Copilot CLI updates without maintaining separate logic.
-
 ## Demo Mode
 
-If the `copilot` binary is not found in PATH, CPM automatically falls back to demo mode with sample data. You can also force demo mode with `--demo`.
+Force demo mode with `--demo` to see sample data without needing the copilot CLI.
 
 ## Built With
 
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) — TUI framework
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) — Style definitions
-- [Bubbles](https://github.com/charmbracelet/bubbles) — Common TUI components
+- [Ink](https://github.com/vadimdemedes/ink) — React for CLIs
+- [React](https://react.dev) — UI component model
+- [TypeScript](https://www.typescriptlang.org) — Type safety
 
 ## License
 
