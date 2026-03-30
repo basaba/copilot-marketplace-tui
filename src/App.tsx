@@ -11,7 +11,7 @@ import {
 import { quickActions } from "./views/Dashboard.js";
 import { filterPlugins as filterInstalled } from "./views/Installed.js";
 import { filterPlugins as filterMarketplace } from "./views/Marketplace.js";
-import { demo } from "./services/index.js";
+import { demo, copilot } from "./services/index.js";
 import type { Screen, InstalledPlugin, MarketplacePlugin } from "./types.js";
 
 interface AppProps {
@@ -22,6 +22,27 @@ type DetailTarget =
   | { source: "installed"; plugin: InstalledPlugin }
   | { source: "marketplace"; plugin: MarketplacePlugin };
 
+function loadData(demoMode: boolean) {
+  if (demoMode) {
+    const plugins = demo.demoInstalledPlugins();
+    const marketplaces = demo.demoMarketplaces();
+    const mpPlugins: Record<string, MarketplacePlugin[]> = {};
+    for (const mp of marketplaces) {
+      mpPlugins[mp.name] = demo.demoMarketplacePlugins(mp.name);
+    }
+    return { plugins, marketplaces, mpPlugins };
+  }
+
+  const plugins = copilot.listInstalled();
+  const marketplaces = copilot.listMarketplaces();
+  const installedNames = new Set(plugins.map((p) => p.name));
+  const mpPlugins: Record<string, MarketplacePlugin[]> = {};
+  for (const mp of marketplaces) {
+    mpPlugins[mp.name] = copilot.browseMarketplace(mp.name, installedNames);
+  }
+  return { plugins, marketplaces, mpPlugins };
+}
+
 export default function App({ demoMode }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -29,16 +50,10 @@ export default function App({ demoMode }: AppProps) {
   const termHeight = stdout?.rows ?? 24;
 
   // Data
-  const [plugins] = useState(() => (demoMode ? demo.demoInstalledPlugins() : []));
-  const [marketplaces] = useState(() => (demoMode ? demo.demoMarketplaces() : []));
-  const [mpPlugins] = useState(() => {
-    if (!demoMode) return {};
-    const result: Record<string, MarketplacePlugin[]> = {};
-    for (const mp of demo.demoMarketplaces()) {
-      result[mp.name] = demo.demoMarketplacePlugins(mp.name);
-    }
-    return result;
-  });
+  const [data] = useState(() => loadData(demoMode));
+  const plugins = data.plugins;
+  const marketplaces = data.marketplaces;
+  const mpPlugins = data.mpPlugins;
 
   const summary = useMemo(
     () => demo.computeSummary(plugins, marketplaces),

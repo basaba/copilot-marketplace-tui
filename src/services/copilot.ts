@@ -13,34 +13,79 @@ function run(cmd: string): string {
   }
 }
 
+// Parse "copilot plugin list" output:
+//   Installed plugins:
+//     • workiq@copilot-plugins (v1.0.0)
+//     • docker@awesome-copilot (v2.0.0) [disabled]
 export function listInstalled(): InstalledPlugin[] {
-  const out = run("copilot plugin list --json");
+  const out = run("copilot plugin list");
   if (!out) return [];
-  try {
-    return JSON.parse(out);
-  } catch {
-    return [];
+  const plugins: InstalledPlugin[] = [];
+  for (const line of out.split("\n")) {
+    // Match: • name@marketplace (vX.Y.Z) [optional status]
+    const match = line.match(/•\s+(\S+?)@(\S+)\s+\(v?([\d.]+)\)(?:\s+\[(\w+)\])?/);
+    if (match) {
+      const [, name, marketplace, version, status] = match;
+      plugins.push({
+        name: name!,
+        version: version!,
+        enabled: status !== "disabled",
+        marketplace: marketplace!,
+        updateAvailable: false,
+      });
+    }
   }
+  return plugins;
 }
 
+// Parse "copilot plugin marketplace list" output:
+//   ✨ Included with GitHub Copilot:
+//     ◆ copilot-plugins (GitHub: github/copilot-plugins)
+//     ◆ awesome-copilot (GitHub: github/awesome-copilot)
+//   📦 User-added:
+//     ◆ my-marketplace (GitHub: user/my-marketplace)
 export function listMarketplaces(): Marketplace[] {
-  const out = run("copilot plugin marketplace list --json");
+  const out = run("copilot plugin marketplace list");
   if (!out) return [];
-  try {
-    return JSON.parse(out);
-  } catch {
-    return [];
+  const marketplaces: Marketplace[] = [];
+  for (const line of out.split("\n")) {
+    const match = line.match(/◆\s+(\S+)\s+\(GitHub:\s+(\S+)\)/);
+    if (match) {
+      const [, name, repo] = match;
+      marketplaces.push({
+        name: name!,
+        url: `https://github.com/${repo}`,
+      });
+    }
   }
+  return marketplaces;
 }
 
-export function browseMarketplace(name: string): MarketplacePlugin[] {
-  const out = run(`copilot plugin marketplace browse ${name} --json`);
+// Parse "copilot plugin marketplace browse <name>" output:
+//   Plugins in "copilot-plugins":
+//     • workiq - WorkIQ plugin for GitHub Copilot.
+//     • spark - Spark plugin for GitHub Copilot.
+export function browseMarketplace(
+  name: string,
+  installedNames: Set<string>
+): MarketplacePlugin[] {
+  const out = run(`copilot plugin marketplace browse ${name}`);
   if (!out) return [];
-  try {
-    return JSON.parse(out);
-  } catch {
-    return [];
+  const plugins: MarketplacePlugin[] = [];
+  for (const line of out.split("\n")) {
+    const match = line.match(/•\s+(\S+)\s+-\s+(.*)/);
+    if (match) {
+      const [, pluginName, description] = match;
+      plugins.push({
+        name: pluginName!,
+        description: description!.trim(),
+        version: "",
+        installed: installedNames.has(pluginName!),
+        marketplace: name,
+      });
+    }
   }
+  return plugins;
 }
 
 export function installPlugin(name: string): { success: boolean; message: string } {
