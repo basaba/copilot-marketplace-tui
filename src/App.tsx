@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { Box, Text, useInput, useApp } from "ink";
+import { Box, Text, useInput, useApp, useStdout } from "ink";
 import { TabBar } from "./components/index.js";
 import {
   Dashboard,
@@ -24,6 +24,9 @@ type DetailTarget =
 
 export default function App({ demoMode }: AppProps) {
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const termWidth = stdout?.columns ?? 80;
+  const termHeight = stdout?.rows ?? 24;
 
   // Data
   const [plugins] = useState(() => (demoMode ? demo.demoInstalledPlugins() : []));
@@ -290,7 +293,7 @@ export default function App({ demoMode }: AppProps) {
   };
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1}>
+    <Box flexDirection="column" width={termWidth} height={termHeight} paddingX={1} paddingY={1}>
       {!showDetail && <TabBar active={screen} onSwitch={setScreen} />}
       {toast && (
         <Box marginBottom={1}>
@@ -301,7 +304,9 @@ export default function App({ demoMode }: AppProps) {
           </Box>
         </Box>
       )}
-      {renderScreen()}
+      <Box flexDirection="column" flexGrow={1}>
+        {renderScreen()}
+      </Box>
     </Box>
   );
 }
