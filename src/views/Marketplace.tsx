@@ -110,7 +110,7 @@ export default function MarketplaceView({
 
       <StatusBar
         items={[
-          { key: "←/→", desc: "switch marketplace" },
+          { key: "1-" + String(marketplaces.length), desc: "switch marketplace" },
           { key: "↑/↓", desc: "navigate" },
           { key: "enter", desc: "detail" },
           { key: "i", desc: "install" },

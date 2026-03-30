@@ -93,7 +93,7 @@ export default function Dashboard({ summary, cursor }: DashboardProps) {
         items={[
           { key: "↑/↓", desc: "navigate" },
           { key: "enter", desc: "select" },
-          { key: "tab", desc: "switch view" },
+          { key: "←/→", desc: "switch view" },
           { key: "q", desc: "quit" },
         ]}
       />

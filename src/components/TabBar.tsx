@@ -27,7 +27,7 @@ export default function TabBar({ active }: TabBarProps) {
         );
       })}
       <Box flexGrow={1} />
-      <Text dimColor>tab/shift+tab to switch</Text>
+      <Text dimColor>←/→ to switch views</Text>
     </Box>
   );
 }

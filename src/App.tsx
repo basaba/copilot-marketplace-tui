@@ -120,15 +120,57 @@ export default function App({ demoMode }: AppProps) {
       return;
     }
 
-    // Search mode — only handle escape to exit search
-    if (instSearchActive || mpSearchActive) {
+    // Search mode — allow arrows + enter + escape, pass rest to TextInput
+    if (instSearchActive) {
       if (key.escape) {
         setInstSearchActive(false);
         setInstSearch("");
+        setInstCursor(0);
+        return;
+      }
+      if (key.upArrow) {
+        setInstCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setInstCursor((c) => Math.min(filteredInstalled.length - 1, c + 1));
+        return;
+      }
+      if (key.return) {
+        setInstSearchActive(false);
+        const p = filteredInstalled[instCursor];
+        if (p) {
+          setDetail({ source: "installed", plugin: p });
+          setShowDetail(true);
+        }
+        return;
+      }
+      // All other keys go to TextInput (handled by Ink)
+      return;
+    }
+    if (mpSearchActive) {
+      if (key.escape) {
         setMpSearchActive(false);
         setMpSearch("");
-        setInstCursor(0);
         setMpCursor(0);
+        return;
+      }
+      if (key.upArrow) {
+        setMpCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setMpCursor((c) => Math.min(filteredMp.length - 1, c + 1));
+        return;
+      }
+      if (key.return) {
+        setMpSearchActive(false);
+        const p = filteredMp[mpCursor];
+        if (p) {
+          setDetail({ source: "marketplace", plugin: p });
+          setShowDetail(true);
+        }
+        return;
       }
       return;
     }
@@ -138,14 +180,16 @@ export default function App({ demoMode }: AppProps) {
       exit();
       return;
     }
-    if (key.tab && !key.shift) {
-      const idx = screens.indexOf(screen);
-      setScreen(screens[(idx + 1) % screens.length]!);
-      return;
-    }
-    if (key.tab && key.shift) {
+
+    // ←/→ arrows switch screens (global, not in search or detail)
+    if (key.leftArrow) {
       const idx = screens.indexOf(screen);
       setScreen(screens[(idx - 1 + screens.length) % screens.length]!);
+      return;
+    }
+    if (key.rightArrow) {
+      const idx = screens.indexOf(screen);
+      setScreen(screens[(idx + 1) % screens.length]!);
       return;
     }
 
@@ -204,18 +248,6 @@ export default function App({ demoMode }: AppProps) {
           setMpSearchActive(true);
           return;
         }
-        if (key.leftArrow || input === "h") {
-          setMpTab((t) =>
-            (t - 1 + marketplaces.length) % marketplaces.length
-          );
-          setMpCursor(0);
-          setMpSearch("");
-        }
-        if (key.rightArrow || input === "l") {
-          setMpTab((t) => (t + 1) % marketplaces.length);
-          setMpCursor(0);
-          setMpSearch("");
-        }
         if (key.upArrow || input === "k")
           setMpCursor((c) => Math.max(0, c - 1));
         if (key.downArrow || input === "j")
@@ -231,7 +263,7 @@ export default function App({ demoMode }: AppProps) {
           const p = filteredMp[mpCursor];
           if (p) showToast(`✓ Installed ${p.name} (demo)`);
         }
-        // Number keys for direct tab select
+        // Number keys for marketplace tab select
         const num = parseInt(input, 10);
         if (num >= 1 && num <= marketplaces.length) {
           setMpTab(num - 1);
