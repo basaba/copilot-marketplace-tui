@@ -51,12 +51,6 @@ export default function DetailView({ plugin, source }: DetailViewProps) {
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold color={colors.white} backgroundColor={colors.primary}>
-          {" "}Plugin Details{" "}
-        </Text>
-      </Box>
-
       <Box
         flexDirection="column"
         borderStyle="round"

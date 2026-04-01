@@ -70,6 +70,7 @@ export default function App({ demoMode }: AppProps) {
   const [instCursor, setInstCursor] = useState(0);
   const [mpCursor, setMpCursor] = useState(0);
   const [mpTab, setMpTab] = useState(0);
+  const [mpFocus, setMpFocus] = useState<"tabbar" | "content">("tabbar");
   const [settingsCursor, setSettingsCursor] = useState(0);
 
   // Search state
@@ -181,15 +182,29 @@ export default function App({ demoMode }: AppProps) {
       return;
     }
 
-    // ←/→ arrows switch screens (global, not in search or detail)
+    // ←/→ arrows: context-sensitive based on focus zone
     if (key.leftArrow) {
-      const idx = screens.indexOf(screen);
-      setScreen(screens[(idx - 1 + screens.length) % screens.length]!);
+      if (screen === "marketplace" && mpFocus === "content") {
+        setMpTab((t) => (t - 1 + marketplaces.length) % marketplaces.length);
+        setMpCursor(0);
+        setMpSearch("");
+      } else {
+        const idx = screens.indexOf(screen);
+        setScreen(screens[(idx - 1 + screens.length) % screens.length]!);
+        setMpFocus("tabbar");
+      }
       return;
     }
     if (key.rightArrow) {
-      const idx = screens.indexOf(screen);
-      setScreen(screens[(idx + 1) % screens.length]!);
+      if (screen === "marketplace" && mpFocus === "content") {
+        setMpTab((t) => (t + 1) % marketplaces.length);
+        setMpCursor(0);
+        setMpSearch("");
+      } else {
+        const idx = screens.indexOf(screen);
+        setScreen(screens[(idx + 1) % screens.length]!);
+        setMpFocus("tabbar");
+      }
       return;
     }
 
@@ -202,7 +217,7 @@ export default function App({ demoMode }: AppProps) {
           setDashCursor((c) => Math.min(quickActions.length - 1, c + 1));
         if (key.return) {
           const action = quickActions[dashCursor];
-          if (action?.id === "marketplace") setScreen("marketplace");
+          if (action?.id === "marketplace") { setScreen("marketplace"); setMpFocus("tabbar"); }
           if (action?.id === "installed") setScreen("installed");
           if (action?.id === "settings") setScreen("settings");
           if (action?.id === "updates") showToast("✓ All plugins up to date (demo)");
@@ -246,22 +261,34 @@ export default function App({ demoMode }: AppProps) {
       case "marketplace": {
         if (input === "/") {
           setMpSearchActive(true);
+          setMpFocus("content");
           return;
         }
-        if (key.upArrow || input === "k")
-          setMpCursor((c) => Math.max(0, c - 1));
-        if (key.downArrow || input === "j")
-          setMpCursor((c) => Math.min(filteredMp.length - 1, c + 1));
-        if (key.return) {
-          const p = filteredMp[mpCursor];
-          if (p) {
-            setDetail({ source: "marketplace", plugin: p });
-            setShowDetail(true);
+        if (mpFocus === "tabbar") {
+          // ↓ or Enter drops focus into content
+          if (key.downArrow || input === "j" || key.return) {
+            setMpFocus("content");
           }
-        }
-        if (input === "i") {
-          const p = filteredMp[mpCursor];
-          if (p) showToast(`✓ Installed ${p.name} (demo)`);
+        } else {
+          // Content zone: ↑ at top returns to tabbar
+          if ((key.upArrow || input === "k") && mpCursor === 0) {
+            setMpFocus("tabbar");
+          } else if (key.upArrow || input === "k") {
+            setMpCursor((c) => Math.max(0, c - 1));
+          }
+          if (key.downArrow || input === "j")
+            setMpCursor((c) => Math.min(filteredMp.length - 1, c + 1));
+          if (key.return) {
+            const p = filteredMp[mpCursor];
+            if (p) {
+              setDetail({ source: "marketplace", plugin: p });
+              setShowDetail(true);
+            }
+          }
+          if (input === "i") {
+            const p = filteredMp[mpCursor];
+            if (p) showToast(`✓ Installed ${p.name} (demo)`);
+          }
         }
         // Number keys for marketplace tab select
         const num = parseInt(input, 10);
@@ -269,6 +296,7 @@ export default function App({ demoMode }: AppProps) {
           setMpTab(num - 1);
           setMpCursor(0);
           setMpSearch("");
+          setMpFocus("content");
         }
         break;
       }
@@ -332,6 +360,7 @@ export default function App({ demoMode }: AppProps) {
               setMpSearch(v);
               setMpCursor(0);
             }}
+            contentFocused={mpFocus === "content"}
           />
         );
       case "settings":
@@ -341,7 +370,7 @@ export default function App({ demoMode }: AppProps) {
 
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight} paddingX={1} paddingY={1}>
-      {!showDetail && <TabBar active={screen} onSwitch={setScreen} />}
+      {!showDetail && <TabBar active={screen} onSwitch={setScreen} focused={screen !== "marketplace" || mpFocus === "tabbar"} />}
       {toast && (
         <Box marginBottom={1}>
           <Box paddingX={1}>

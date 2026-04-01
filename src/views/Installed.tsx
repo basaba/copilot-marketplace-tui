@@ -50,11 +50,6 @@ export default function InstalledView({
   if (plugins.length === 0) {
     return (
       <Box flexDirection="column">
-        <Box marginBottom={1}>
-          <Text bold color={colors.white} backgroundColor={colors.primary}>
-            {" "}Installed Plugins{" "}
-          </Text>
-        </Box>
         <Box paddingX={2} paddingY={1}>
           <Text italic color={colors.textDim}>
             No plugins installed. Browse the Marketplace to discover and install
@@ -67,12 +62,6 @@ export default function InstalledView({
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold color={colors.white} backgroundColor={colors.primary}>
-          {" "}Installed Plugins{" "}
-        </Text>
-      </Box>
-
       <SearchBar
         value={searchQuery}
         onChange={onSearchChange}

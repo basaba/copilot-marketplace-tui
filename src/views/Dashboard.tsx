@@ -45,16 +45,6 @@ function StatCard({ value, label, color }: StatCardProps) {
 export default function Dashboard({ summary, cursor }: DashboardProps) {
   return (
     <Box flexDirection="column">
-      {/* Title */}
-      <Box marginBottom={1}>
-        <Text bold color={colors.white} backgroundColor={colors.primary}>
-          {" "}⚡ CPM — Copilot Plugin Manager v0.1.0{" "}
-        </Text>
-      </Box>
-      <Text italic color={colors.secondary}>
-        Manage your GitHub Copilot plugins from the terminal
-      </Text>
-
       {/* Stat cards */}
       <Box gap={1} marginY={1}>
         <StatCard value={summary.totalInstalled} label="Installed" color={colors.primary} />

@@ -12,6 +12,7 @@ interface MarketplaceViewProps {
   searchQuery: string;
   searchActive: boolean;
   onSearchChange: (query: string) => void;
+  contentFocused?: boolean;
 }
 
 const columns = [
@@ -42,15 +43,11 @@ export default function MarketplaceView({
   searchQuery,
   searchActive,
   onSearchChange,
+  contentFocused = false,
 }: MarketplaceViewProps) {
   if (marketplaces.length === 0) {
     return (
       <Box flexDirection="column">
-        <Box marginBottom={1}>
-          <Text bold color={colors.white} backgroundColor={colors.primary}>
-            {" "}Marketplace Browser{" "}
-          </Text>
-        </Box>
         <Box paddingX={2} paddingY={1}>
           <Text italic color={colors.textDim}>
             No marketplaces registered. Go to Settings and add one.
@@ -73,12 +70,6 @@ export default function MarketplaceView({
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold color={colors.white} backgroundColor={colors.primary}>
-          {" "}Marketplace Browser{" "}
-        </Text>
-      </Box>
-
       {/* Marketplace tabs */}
       <Box gap={1} marginBottom={1}>
         {marketplaces.map((mp, i) => {
@@ -86,9 +77,21 @@ export default function MarketplaceView({
           return (
             <Box key={mp.name} paddingX={1}>
               <Text
-                bold={isActive}
-                color={isActive ? colors.white : colors.textDim}
-                backgroundColor={isActive ? colors.accent : undefined}
+                bold={isActive && contentFocused}
+                color={
+                  contentFocused && isActive
+                    ? colors.white
+                    : isActive
+                      ? colors.secondary
+                      : colors.textDim
+                }
+                backgroundColor={
+                  contentFocused && isActive
+                    ? colors.accent
+                    : isActive
+                      ? colors.border
+                      : undefined
+                }
               >
                 {i + 1}. {mp.name}
               </Text>
@@ -109,13 +112,20 @@ export default function MarketplaceView({
       </Box>
 
       <StatusBar
-        items={[
-          { key: "1-" + String(marketplaces.length), desc: "switch marketplace" },
-          { key: "↑/↓", desc: "navigate" },
-          { key: "enter", desc: "detail" },
-          { key: "i", desc: "install" },
-          { key: "/", desc: "search" },
-        ]}
+        items={
+          contentFocused
+            ? [
+                { key: "←/→", desc: "switch marketplace" },
+                { key: "↑/↓", desc: "navigate" },
+                { key: "enter", desc: "detail" },
+                { key: "i", desc: "install" },
+                { key: "/", desc: "search" },
+              ]
+            : [
+                { key: "←/→", desc: "switch view" },
+                { key: "↓/enter", desc: "enter content" },
+              ]
+        }
       />
     </Box>
   );

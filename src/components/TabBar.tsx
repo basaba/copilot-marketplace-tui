@@ -6,9 +6,10 @@ import { SCREENS, SCREEN_LABELS, type Screen } from "../types.js";
 interface TabBarProps {
   active: Screen;
   onSwitch: (screen: Screen) => void;
+  focused?: boolean;
 }
 
-export default function TabBar({ active }: TabBarProps) {
+export default function TabBar({ active, focused = true }: TabBarProps) {
   return (
     <Box gap={1} paddingBottom={1}>
       {SCREENS.map((screen) => {
@@ -16,9 +17,23 @@ export default function TabBar({ active }: TabBarProps) {
         return (
           <Box key={screen} paddingX={1}>
             <Text
-              bold={isActive}
-              color={isActive ? colors.white : colors.textDim}
-              backgroundColor={isActive ? colors.primary : colors.bgAlt}
+              bold={isActive && focused}
+              color={
+                focused && isActive
+                  ? colors.white
+                  : isActive
+                    ? colors.secondary
+                    : colors.textDim
+              }
+              backgroundColor={
+                focused && isActive
+                  ? colors.primary
+                  : isActive
+                    ? colors.border
+                    : focused
+                      ? colors.bgAlt
+                      : undefined
+              }
             >
               {" "}
               {SCREEN_LABELS[screen]}{" "}

@@ -15,12 +15,6 @@ export default function SettingsView({
 }: SettingsViewProps) {
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text bold color={colors.white} backgroundColor={colors.primary}>
-          {" "}Settings{" "}
-        </Text>
-      </Box>
-
       <Box
         flexDirection="column"
         borderStyle="round"
