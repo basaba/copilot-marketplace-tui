@@ -51,9 +51,9 @@ export default function App({ demoMode }: AppProps) {
 
   // Data
   const [data] = useState(() => loadData(demoMode));
-  const plugins = data.plugins;
+  const [plugins, setPlugins] = useState(data.plugins);
   const marketplaces = data.marketplaces;
-  const mpPlugins = data.mpPlugins;
+  const [mpPlugins, setMpPlugins] = useState(data.mpPlugins);
 
   const summary = useMemo(
     () => demo.computeSummary(plugins, marketplaces),
@@ -87,6 +87,83 @@ export default function App({ demoMode }: AppProps) {
     setTimeout(() => setToast(""), 3000);
   }, []);
 
+  // Plugin action handlers — call real CLI when not in demo mode
+  const installPlugin = useCallback((p: MarketplacePlugin) => {
+    if (p.installed) return;
+    if (!demoMode) {
+      const result = copilot.installPlugin(`${p.name}@${p.marketplace}`);
+      if (!result.success) { showToast(`✗ Install failed: ${p.name}`); return; }
+    }
+    setPlugins(prev => [...prev, {
+      name: p.name,
+      version: p.version,
+      enabled: true,
+      marketplace: p.marketplace,
+      updateAvailable: false,
+    }]);
+    setMpPlugins(prev => {
+      const updated = { ...prev };
+      const key = p.marketplace;
+      updated[key] = (updated[key] || []).map(mp =>
+        mp.name === p.name ? { ...mp, installed: true } : mp
+      );
+      return updated;
+    });
+    showToast(`✓ Installed ${p.name}`);
+  }, [demoMode, showToast]);
+
+  const uninstallPlugin = useCallback((p: InstalledPlugin) => {
+    if (!demoMode) {
+      const result = copilot.uninstallPlugin(`${p.name}@${p.marketplace}`);
+      if (!result.success) { showToast(`✗ Uninstall failed: ${p.name}`); return; }
+    }
+    setPlugins(prev => prev.filter(pl => pl.name !== p.name));
+    setMpPlugins(prev => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        updated[key] = updated[key]!.map(mp =>
+          mp.name === p.name ? { ...mp, installed: false } : mp
+        );
+      }
+      return updated;
+    });
+    showToast(`✓ Uninstalled ${p.name}`);
+  }, [demoMode, showToast]);
+
+  const enablePlugin = useCallback((p: InstalledPlugin) => {
+    if (!demoMode) {
+      const result = copilot.enablePlugin(`${p.name}@${p.marketplace}`);
+      if (!result.success) { showToast(`✗ Enable failed: ${p.name}`); return; }
+    }
+    setPlugins(prev => prev.map(pl =>
+      pl.name === p.name ? { ...pl, enabled: true } : pl
+    ));
+    showToast(`✓ Enabled ${p.name}`);
+  }, [demoMode, showToast]);
+
+  const disablePlugin = useCallback((p: InstalledPlugin) => {
+    if (!demoMode) {
+      const result = copilot.disablePlugin(`${p.name}@${p.marketplace}`);
+      if (!result.success) { showToast(`✗ Disable failed: ${p.name}`); return; }
+    }
+    setPlugins(prev => prev.map(pl =>
+      pl.name === p.name ? { ...pl, enabled: false } : pl
+    ));
+    showToast(`✓ Disabled ${p.name}`);
+  }, [demoMode, showToast]);
+
+  const updatePlugin = useCallback((p: InstalledPlugin) => {
+    if (!p.updateAvailable) return;
+    if (!demoMode) {
+      const result = copilot.updatePlugin(`${p.name}@${p.marketplace}`);
+      if (!result.success) { showToast(`✗ Update failed: ${p.name}`); return; }
+    }
+    setPlugins(prev => prev.map(pl =>
+      pl.name === p.name ? { ...pl, updateAvailable: false } : pl
+    ));
+    showToast(`✓ Updated ${p.name}`);
+  }, [demoMode, showToast]);
+
   // Get filtered lists for cursor bounds
   const filteredInstalled = useMemo(
     () => filterInstalled(plugins, instSearch),
@@ -109,14 +186,14 @@ export default function App({ demoMode }: AppProps) {
       }
       if (detail?.source === "installed") {
         const p = detail.plugin as InstalledPlugin;
-        if (input === "e") showToast(`✓ Enabled ${p.name} (demo)`);
-        if (input === "d") showToast(`✓ Disabled ${p.name} (demo)`);
-        if (input === "u") showToast(`✓ Updated ${p.name} (demo)`);
-        if (input === "x") showToast(`✓ Uninstalled ${p.name} (demo)`);
+        if (input === "e") enablePlugin(p);
+        if (input === "d") disablePlugin(p);
+        if (input === "u") updatePlugin(p);
+        if (input === "x") { uninstallPlugin(p); setShowDetail(false); }
       }
       if (detail?.source === "marketplace") {
         const p = detail.plugin as MarketplacePlugin;
-        if (input === "i") showToast(`✓ Installed ${p.name} (demo)`);
+        if (input === "i") installPlugin(p);
       }
       return;
     }
@@ -242,19 +319,22 @@ export default function App({ demoMode }: AppProps) {
         }
         if (input === "e") {
           const p = filteredInstalled[instCursor];
-          if (p) showToast(`✓ Enabled ${p.name} (demo)`);
+          if (p) enablePlugin(p);
         }
         if (input === "d") {
           const p = filteredInstalled[instCursor];
-          if (p) showToast(`✓ Disabled ${p.name} (demo)`);
+          if (p) disablePlugin(p);
         }
         if (input === "u") {
           const p = filteredInstalled[instCursor];
-          if (p) showToast(`✓ Updated ${p.name} (demo)`);
+          if (p) updatePlugin(p);
         }
         if (input === "x") {
           const p = filteredInstalled[instCursor];
-          if (p) showToast(`✓ Uninstalled ${p.name} (demo)`);
+          if (p) {
+            uninstallPlugin(p);
+            setInstCursor(c => Math.max(0, Math.min(c, filteredInstalled.length - 2)));
+          }
         }
         break;
       }
@@ -287,7 +367,7 @@ export default function App({ demoMode }: AppProps) {
           }
           if (input === "i") {
             const p = filteredMp[mpCursor];
-            if (p) showToast(`✓ Installed ${p.name} (demo)`);
+            if (p) installPlugin(p);
           }
         }
         // Number keys for marketplace tab select
