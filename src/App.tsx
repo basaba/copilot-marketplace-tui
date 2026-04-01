@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
+import Spinner from "ink-spinner";
 import { TabBar } from "./components/index.js";
 import {
   Dashboard,
@@ -22,7 +23,13 @@ type DetailTarget =
   | { source: "installed"; plugin: InstalledPlugin }
   | { source: "marketplace"; plugin: MarketplacePlugin };
 
-function loadData(demoMode: boolean) {
+type AppData = {
+  plugins: InstalledPlugin[];
+  marketplaces: import("./types.js").Marketplace[];
+  mpPlugins: Record<string, MarketplacePlugin[]>;
+};
+
+function loadDataSync(demoMode: boolean): AppData {
   if (demoMode) {
     const plugins = demo.demoInstalledPlugins();
     const marketplaces = demo.demoMarketplaces();
@@ -32,13 +39,24 @@ function loadData(demoMode: boolean) {
     }
     return { plugins, marketplaces, mpPlugins };
   }
+  return { plugins: [], marketplaces: [], mpPlugins: {} };
+}
 
-  const plugins = copilot.listInstalled();
-  const marketplaces = copilot.listMarketplaces();
+async function loadDataAsync(): Promise<AppData> {
+  const [plugins, marketplaces] = await Promise.all([
+    copilot.listInstalledAsync(),
+    copilot.listMarketplacesAsync(),
+  ]);
   const installedNames = new Set(plugins.map((p) => p.name));
+  const mpEntries = await Promise.all(
+    marketplaces.map(async (mp) => {
+      const items = await copilot.browseMarketplaceAsync(mp.name, installedNames);
+      return [mp.name, items] as const;
+    })
+  );
   const mpPlugins: Record<string, MarketplacePlugin[]> = {};
-  for (const mp of marketplaces) {
-    mpPlugins[mp.name] = copilot.browseMarketplace(mp.name, installedNames);
+  for (const [name, items] of mpEntries) {
+    mpPlugins[name] = items;
   }
   return { plugins, marketplaces, mpPlugins };
 }
@@ -49,11 +67,31 @@ export default function App({ demoMode }: AppProps) {
   const termWidth = stdout?.columns ?? 80;
   const termHeight = stdout?.rows ?? 24;
 
-  // Data
-  const [data] = useState(() => loadData(demoMode));
-  const [plugins, setPlugins] = useState(data.plugins);
-  const marketplaces = data.marketplaces;
-  const [mpPlugins, setMpPlugins] = useState(data.mpPlugins);
+  // Data — load synchronously for demo, async for real CLI
+  const [ready, setReady] = useState(demoMode);
+  const [plugins, setPlugins] = useState<InstalledPlugin[]>(() =>
+    demoMode ? demo.demoInstalledPlugins() : []
+  );
+  const [marketplaces, setMarketplaces] = useState<import("./types.js").Marketplace[]>(() =>
+    demoMode ? demo.demoMarketplaces() : []
+  );
+  const [mpPlugins, setMpPlugins] = useState<Record<string, MarketplacePlugin[]>>(() => {
+    if (!demoMode) return {};
+    const mps = demo.demoMarketplaces();
+    const result: Record<string, MarketplacePlugin[]> = {};
+    for (const mp of mps) result[mp.name] = demo.demoMarketplacePlugins(mp.name);
+    return result;
+  });
+
+  useEffect(() => {
+    if (demoMode) return;
+    loadDataAsync().then((data) => {
+      setPlugins(data.plugins);
+      setMarketplaces(data.marketplaces);
+      setMpPlugins(data.mpPlugins);
+      setReady(true);
+    });
+  }, [demoMode]);
 
   const summary = useMemo(
     () => demo.computeSummary(plugins, marketplaces),
@@ -81,88 +119,138 @@ export default function App({ demoMode }: AppProps) {
 
   // Toast
   const [toast, setToast] = useState("");
+  // Loading state for async CLI operations
+  const [loading, setLoading] = useState("");
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 3000);
   }, []);
 
-  // Plugin action handlers — call real CLI when not in demo mode
+  // Plugin action handlers — call real CLI (async) when not in demo mode
   const installPlugin = useCallback((p: MarketplacePlugin) => {
-    if (p.installed) return;
+    if (p.installed || loading) return;
+    const spec = `${p.name}@${p.marketplace}`;
+    const onSuccess = () => {
+      setPlugins(prev => [...prev, {
+        name: p.name,
+        version: p.version,
+        enabled: true,
+        marketplace: p.marketplace,
+        updateAvailable: false,
+      }]);
+      setMpPlugins(prev => {
+        const updated = { ...prev };
+        const key = p.marketplace;
+        updated[key] = (updated[key] || []).map(mp =>
+          mp.name === p.name ? { ...mp, installed: true } : mp
+        );
+        return updated;
+      });
+      showToast(`✓ Installed ${p.name}`);
+    };
     if (!demoMode) {
-      const result = copilot.installPlugin(`${p.name}@${p.marketplace}`);
-      if (!result.success) { showToast(`✗ Install failed: ${p.name}`); return; }
+      setLoading(`Installing ${p.name}…`);
+      copilot.installPluginAsync(spec).then(result => {
+        setLoading("");
+        if (result.success) onSuccess();
+        else showToast(`✗ Install failed: ${p.name}`);
+      });
+    } else {
+      onSuccess();
     }
-    setPlugins(prev => [...prev, {
-      name: p.name,
-      version: p.version,
-      enabled: true,
-      marketplace: p.marketplace,
-      updateAvailable: false,
-    }]);
-    setMpPlugins(prev => {
-      const updated = { ...prev };
-      const key = p.marketplace;
-      updated[key] = (updated[key] || []).map(mp =>
-        mp.name === p.name ? { ...mp, installed: true } : mp
-      );
-      return updated;
-    });
-    showToast(`✓ Installed ${p.name}`);
-  }, [demoMode, showToast]);
+  }, [demoMode, loading, showToast]);
 
   const uninstallPlugin = useCallback((p: InstalledPlugin) => {
+    if (loading) return;
+    const spec = `${p.name}@${p.marketplace}`;
+    const onSuccess = () => {
+      setPlugins(prev => prev.filter(pl => pl.name !== p.name));
+      setMpPlugins(prev => {
+        const updated = { ...prev };
+        for (const key of Object.keys(updated)) {
+          updated[key] = updated[key]!.map(mp =>
+            mp.name === p.name ? { ...mp, installed: false } : mp
+          );
+        }
+        return updated;
+      });
+      showToast(`✓ Uninstalled ${p.name}`);
+    };
     if (!demoMode) {
-      const result = copilot.uninstallPlugin(`${p.name}@${p.marketplace}`);
-      if (!result.success) { showToast(`✗ Uninstall failed: ${p.name}`); return; }
+      setLoading(`Uninstalling ${p.name}…`);
+      copilot.uninstallPluginAsync(spec).then(result => {
+        setLoading("");
+        if (result.success) onSuccess();
+        else showToast(`✗ Uninstall failed: ${p.name}`);
+      });
+    } else {
+      onSuccess();
     }
-    setPlugins(prev => prev.filter(pl => pl.name !== p.name));
-    setMpPlugins(prev => {
-      const updated = { ...prev };
-      for (const key of Object.keys(updated)) {
-        updated[key] = updated[key]!.map(mp =>
-          mp.name === p.name ? { ...mp, installed: false } : mp
-        );
-      }
-      return updated;
-    });
-    showToast(`✓ Uninstalled ${p.name}`);
-  }, [demoMode, showToast]);
+  }, [demoMode, loading, showToast]);
 
   const enablePlugin = useCallback((p: InstalledPlugin) => {
+    if (loading) return;
+    const spec = `${p.name}@${p.marketplace}`;
+    const onSuccess = () => {
+      setPlugins(prev => prev.map(pl =>
+        pl.name === p.name ? { ...pl, enabled: true } : pl
+      ));
+      showToast(`✓ Enabled ${p.name}`);
+    };
     if (!demoMode) {
-      const result = copilot.enablePlugin(`${p.name}@${p.marketplace}`);
-      if (!result.success) { showToast(`✗ Enable failed: ${p.name}`); return; }
+      setLoading(`Enabling ${p.name}…`);
+      copilot.enablePluginAsync(spec).then(result => {
+        setLoading("");
+        if (result.success) onSuccess();
+        else showToast(`✗ Enable failed: ${p.name}`);
+      });
+    } else {
+      onSuccess();
     }
-    setPlugins(prev => prev.map(pl =>
-      pl.name === p.name ? { ...pl, enabled: true } : pl
-    ));
-    showToast(`✓ Enabled ${p.name}`);
-  }, [demoMode, showToast]);
+  }, [demoMode, loading, showToast]);
 
   const disablePlugin = useCallback((p: InstalledPlugin) => {
+    if (loading) return;
+    const spec = `${p.name}@${p.marketplace}`;
+    const onSuccess = () => {
+      setPlugins(prev => prev.map(pl =>
+        pl.name === p.name ? { ...pl, enabled: false } : pl
+      ));
+      showToast(`✓ Disabled ${p.name}`);
+    };
     if (!demoMode) {
-      const result = copilot.disablePlugin(`${p.name}@${p.marketplace}`);
-      if (!result.success) { showToast(`✗ Disable failed: ${p.name}`); return; }
+      setLoading(`Disabling ${p.name}…`);
+      copilot.disablePluginAsync(spec).then(result => {
+        setLoading("");
+        if (result.success) onSuccess();
+        else showToast(`✗ Disable failed: ${p.name}`);
+      });
+    } else {
+      onSuccess();
     }
-    setPlugins(prev => prev.map(pl =>
-      pl.name === p.name ? { ...pl, enabled: false } : pl
-    ));
-    showToast(`✓ Disabled ${p.name}`);
-  }, [demoMode, showToast]);
+  }, [demoMode, loading, showToast]);
 
   const updatePlugin = useCallback((p: InstalledPlugin) => {
-    if (!p.updateAvailable) return;
+    if (!p.updateAvailable || loading) return;
+    const spec = `${p.name}@${p.marketplace}`;
+    const onSuccess = () => {
+      setPlugins(prev => prev.map(pl =>
+        pl.name === p.name ? { ...pl, updateAvailable: false } : pl
+      ));
+      showToast(`✓ Updated ${p.name}`);
+    };
     if (!demoMode) {
-      const result = copilot.updatePlugin(`${p.name}@${p.marketplace}`);
-      if (!result.success) { showToast(`✗ Update failed: ${p.name}`); return; }
+      setLoading(`Updating ${p.name}…`);
+      copilot.updatePluginAsync(spec).then(result => {
+        setLoading("");
+        if (result.success) onSuccess();
+        else showToast(`✗ Update failed: ${p.name}`);
+      });
+    } else {
+      onSuccess();
     }
-    setPlugins(prev => prev.map(pl =>
-      pl.name === p.name ? { ...pl, updateAvailable: false } : pl
-    ));
-    showToast(`✓ Updated ${p.name}`);
-  }, [demoMode, showToast]);
+  }, [demoMode, loading, showToast]);
 
   // Get filtered lists for cursor bounds
   const filteredInstalled = useMemo(
@@ -178,6 +266,9 @@ export default function App({ demoMode }: AppProps) {
   const screens: Screen[] = ["dashboard", "installed", "marketplace", "settings"];
 
   useInput((input, key) => {
+    // Block all input while loading or not yet ready
+    if (loading || !ready) return;
+
     // Detail view keybindings
     if (showDetail) {
       if (key.escape) {
@@ -448,10 +539,31 @@ export default function App({ demoMode }: AppProps) {
     }
   };
 
+  if (!ready) {
+    return (
+      <Box flexDirection="column" width={termWidth} height={termHeight} paddingX={1} paddingY={1} justifyContent="center" alignItems="center">
+        <Box>
+          <Text color="#58a6ff">
+            <Spinner type="dots" />
+          </Text>
+          <Text color="#58a6ff"> Loading plugins and marketplaces…</Text>
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight} paddingX={1} paddingY={1}>
       {!showDetail && <TabBar active={screen} onSwitch={setScreen} focused={screen !== "marketplace" || mpFocus === "tabbar"} />}
-      {toast && (
+      {loading && (
+        <Box marginBottom={1}>
+          <Text color="#58a6ff">
+            <Spinner type="dots" />
+          </Text>
+          <Text color="#58a6ff"> {loading}</Text>
+        </Box>
+      )}
+      {!loading && toast && (
         <Box marginBottom={1}>
           <Box paddingX={1}>
             <Text bold color={toast.startsWith("✗") ? "#f85149" : "#3fb950"}>
