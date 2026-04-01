@@ -10,8 +10,8 @@ import {
   SettingsView,
 } from "./views/index.js";
 import { quickActions } from "./views/Dashboard.js";
-import { filterPlugins as filterInstalled } from "./views/Installed.js";
-import { filterPlugins as filterMarketplace } from "./views/Marketplace.js";
+import { filterPlugins as filterInstalled, INSTALLED_CHROME } from "./views/Installed.js";
+import { filterPlugins as filterMarketplace, MARKETPLACE_CHROME } from "./views/Marketplace.js";
 import { demo, copilot } from "./services/index.js";
 import type { Screen, InstalledPlugin, MarketplacePlugin } from "./types.js";
 
@@ -265,6 +265,9 @@ export default function App({ demoMode }: AppProps) {
 
   const screens: Screen[] = ["dashboard", "installed", "marketplace", "settings"];
 
+  const instPageSize = Math.max(1, termHeight - INSTALLED_CHROME);
+  const mpPageSize = Math.max(1, termHeight - MARKETPLACE_CHROME);
+
   useInput((input, key) => {
     // Block all input while loading or not yet ready
     if (loading || !ready) return;
@@ -305,6 +308,14 @@ export default function App({ demoMode }: AppProps) {
         setInstCursor((c) => Math.min(filteredInstalled.length - 1, c + 1));
         return;
       }
+      if (key.pageUp) {
+        setInstCursor((c) => Math.max(0, c - instPageSize));
+        return;
+      }
+      if (key.pageDown) {
+        setInstCursor((c) => Math.min(filteredInstalled.length - 1, c + instPageSize));
+        return;
+      }
       if (key.return) {
         setInstSearchActive(false);
         const p = filteredInstalled[instCursor];
@@ -330,6 +341,14 @@ export default function App({ demoMode }: AppProps) {
       }
       if (key.downArrow) {
         setMpCursor((c) => Math.min(filteredMp.length - 1, c + 1));
+        return;
+      }
+      if (key.pageUp) {
+        setMpCursor((c) => Math.max(0, c - mpPageSize));
+        return;
+      }
+      if (key.pageDown) {
+        setMpCursor((c) => Math.min(filteredMp.length - 1, c + mpPageSize));
         return;
       }
       if (key.return) {
@@ -401,6 +420,10 @@ export default function App({ demoMode }: AppProps) {
           setInstCursor((c) => Math.max(0, c - 1));
         if (key.downArrow || input === "j")
           setInstCursor((c) => Math.min(filteredInstalled.length - 1, c + 1));
+        if (key.pageUp)
+          setInstCursor((c) => Math.max(0, c - instPageSize));
+        if (key.pageDown)
+          setInstCursor((c) => Math.min(filteredInstalled.length - 1, c + instPageSize));
         if (key.return) {
           const p = filteredInstalled[instCursor];
           if (p) {
@@ -449,6 +472,10 @@ export default function App({ demoMode }: AppProps) {
           }
           if (key.downArrow || input === "j")
             setMpCursor((c) => Math.min(filteredMp.length - 1, c + 1));
+          if (key.pageUp)
+            setMpCursor((c) => Math.max(0, c - mpPageSize));
+          if (key.pageDown)
+            setMpCursor((c) => Math.min(filteredMp.length - 1, c + mpPageSize));
           if (key.return) {
             const p = filteredMp[mpCursor];
             if (p) {
@@ -516,6 +543,7 @@ export default function App({ demoMode }: AppProps) {
               setInstSearch(v);
               setInstCursor(0);
             }}
+            termHeight={termHeight}
           />
         );
       case "marketplace":
@@ -532,6 +560,7 @@ export default function App({ demoMode }: AppProps) {
               setMpCursor(0);
             }}
             contentFocused={mpFocus === "content"}
+            termHeight={termHeight}
           />
         );
       case "settings":

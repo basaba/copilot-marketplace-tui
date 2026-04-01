@@ -13,6 +13,7 @@ interface MarketplaceViewProps {
   searchActive: boolean;
   onSearchChange: (query: string) => void;
   contentFocused?: boolean;
+  termHeight?: number;
 }
 
 const columns = [
@@ -35,6 +36,9 @@ function filterPlugins(
   );
 }
 
+// Overhead: App padding(2) + TabBar(2) + MP tabs(2) + SearchBar(3) + margin(1) + StatusBar(2) + Table header/sep/scroll(3)
+const MARKETPLACE_CHROME = 15;
+
 export default function MarketplaceView({
   marketplaces,
   plugins,
@@ -44,7 +48,9 @@ export default function MarketplaceView({
   searchActive,
   onSearchChange,
   contentFocused = false,
+  termHeight,
 }: MarketplaceViewProps) {
+  const tableHeight = termHeight ? Math.max(5, termHeight - MARKETPLACE_CHROME) : undefined;
   if (marketplaces.length === 0) {
     return (
       <Box flexDirection="column">
@@ -108,7 +114,7 @@ export default function MarketplaceView({
       />
 
       <Box marginTop={1}>
-        <Table columns={columns} rows={rows} cursor={cursor} />
+        <Table columns={columns} rows={rows} cursor={cursor} height={tableHeight} />
       </Box>
 
       <StatusBar
@@ -131,4 +137,4 @@ export default function MarketplaceView({
   );
 }
 
-export { filterPlugins };
+export { filterPlugins, MARKETPLACE_CHROME };

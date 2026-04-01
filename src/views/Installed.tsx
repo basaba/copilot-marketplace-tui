@@ -10,6 +10,7 @@ interface InstalledViewProps {
   searchQuery: string;
   searchActive: boolean;
   onSearchChange: (query: string) => void;
+  termHeight?: number;
 }
 
 const columns = [
@@ -30,13 +31,18 @@ function filterPlugins(plugins: InstalledPlugin[], query: string): InstalledPlug
   );
 }
 
+// Overhead: App padding(2) + TabBar(2) + SearchBar(3) + margin(1) + StatusBar(2) + Table header/sep/scroll(3)
+const INSTALLED_CHROME = 13;
+
 export default function InstalledView({
   plugins,
   cursor,
   searchQuery,
   searchActive,
   onSearchChange,
+  termHeight,
 }: InstalledViewProps) {
+  const tableHeight = termHeight ? Math.max(5, termHeight - INSTALLED_CHROME) : undefined;
   const filtered = filterPlugins(plugins, searchQuery);
 
   const rows = filtered.map((p) => ({
@@ -70,7 +76,7 @@ export default function InstalledView({
       />
 
       <Box marginTop={1}>
-        <Table columns={columns} rows={rows} cursor={cursor} />
+        <Table columns={columns} rows={rows} cursor={cursor} height={tableHeight} />
       </Box>
 
       <StatusBar
@@ -88,4 +94,4 @@ export default function InstalledView({
   );
 }
 
-export { filterPlugins };
+export { filterPlugins, INSTALLED_CHROME };
