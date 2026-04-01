@@ -3,14 +3,11 @@ import React from "react";
 import { render } from "ink";
 import App from "./App.js";
 
-const args = process.argv.slice(2);
-const demoMode = args.includes("--demo");
-
 // Enter alternate screen buffer (like vim, less, etc.)
 process.stdout.write("\x1b[?1049h");
 process.stdout.write("\x1b[H"); // Move cursor to top-left
 
-const instance = render(React.createElement(App, { demoMode }), {
+const instance = render(React.createElement(App), {
   exitOnCtrlC: true,
 });
 

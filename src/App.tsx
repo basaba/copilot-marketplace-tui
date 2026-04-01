@@ -12,12 +12,8 @@ import {
 import { quickActions } from "./views/Dashboard.js";
 import { filterPlugins as filterInstalled, INSTALLED_CHROME } from "./views/Installed.js";
 import { filterPlugins as filterMarketplace, MARKETPLACE_CHROME } from "./views/Marketplace.js";
-import { demo, copilot, config } from "./services/index.js";
-import type { Screen, InstalledPlugin, MarketplacePlugin } from "./types.js";
-
-interface AppProps {
-  demoMode: boolean;
-}
+import { copilot, config } from "./services/index.js";
+import type { Screen, InstalledPlugin, MarketplacePlugin, Marketplace, PluginSummary } from "./types.js";
 
 type DetailTarget =
   | { source: "installed"; plugin: InstalledPlugin }
@@ -25,23 +21,18 @@ type DetailTarget =
 
 type AppData = {
   plugins: InstalledPlugin[];
-  marketplaces: import("./types.js").Marketplace[];
+  marketplaces: Marketplace[];
   mpPlugins: Record<string, MarketplacePlugin[]>;
 };
 
-function loadDataSync(demoMode: boolean): AppData {
-  if (demoMode) {
-    const plugins = demo.demoInstalledPlugins();
-    const marketplaces = config.applyConfig(demo.demoMarketplaces());
-    const persisted = config.loadMarketplacePlugins();
-    const mpPlugins: Record<string, MarketplacePlugin[]> = {};
-    for (const mp of marketplaces) {
-      const demoPlugins = demo.demoMarketplacePlugins(mp.name);
-      mpPlugins[mp.name] = demoPlugins.length > 0 ? demoPlugins : (persisted[mp.name] || []);
-    }
-    return { plugins, marketplaces, mpPlugins };
-  }
-  return { plugins: [], marketplaces: [], mpPlugins: {} };
+function computeSummary(plugins: InstalledPlugin[], marketplaces: Marketplace[]): PluginSummary {
+  return {
+    totalInstalled: plugins.length,
+    enabled: plugins.filter((p) => p.enabled).length,
+    disabled: plugins.filter((p) => !p.enabled).length,
+    updatesAvailable: plugins.filter((p) => p.updateAvailable).length,
+    marketplaceCount: marketplaces.length,
+  };
 }
 
 async function loadDataAsync(): Promise<AppData> {
@@ -66,44 +57,29 @@ async function loadDataAsync(): Promise<AppData> {
   return { plugins, marketplaces, mpPlugins };
 }
 
-export default function App({ demoMode }: AppProps) {
+export default function App() {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const termWidth = stdout?.columns ?? 80;
   const termHeight = stdout?.rows ?? 24;
 
-  // Data — load synchronously for demo, async for real CLI
-  const [ready, setReady] = useState(demoMode);
-  const [plugins, setPlugins] = useState<InstalledPlugin[]>(() =>
-    demoMode ? demo.demoInstalledPlugins() : []
-  );
-  const [marketplaces, setMarketplaces] = useState<import("./types.js").Marketplace[]>(() =>
-    demoMode ? config.applyConfig(demo.demoMarketplaces()) : []
-  );
-  const [mpPlugins, setMpPlugins] = useState<Record<string, MarketplacePlugin[]>>(() => {
-    if (!demoMode) return {};
-    const mps = config.applyConfig(demo.demoMarketplaces());
-    const persisted = config.loadMarketplacePlugins();
-    const result: Record<string, MarketplacePlugin[]> = {};
-    for (const mp of mps) {
-      const demoPlugins = demo.demoMarketplacePlugins(mp.name);
-      result[mp.name] = demoPlugins.length > 0 ? demoPlugins : (persisted[mp.name] || []);
-    }
-    return result;
-  });
+  // Data — load async from CLI
+  const [ready, setReady] = useState(false);
+  const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
+  const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
+  const [mpPlugins, setMpPlugins] = useState<Record<string, MarketplacePlugin[]>>({});
 
   useEffect(() => {
-    if (demoMode) return;
     loadDataAsync().then((data) => {
       setPlugins(data.plugins);
       setMarketplaces(data.marketplaces);
       setMpPlugins(data.mpPlugins);
       setReady(true);
     });
-  }, [demoMode]);
+  }, []);
 
   const summary = useMemo(
-    () => demo.computeSummary(plugins, marketplaces),
+    () => computeSummary(plugins, marketplaces),
     [plugins, marketplaces]
   );
 
@@ -140,7 +116,7 @@ export default function App({ demoMode }: AppProps) {
     setTimeout(() => setToast(""), 3000);
   }, []);
 
-  // Plugin action handlers — call real CLI (async) when not in demo mode
+  // Plugin action handlers
   const installPlugin = useCallback((p: MarketplacePlugin) => {
     if (p.installed || loading) return;
     const spec = `${p.name}@${p.marketplace}`;
@@ -162,17 +138,13 @@ export default function App({ demoMode }: AppProps) {
       });
       showToast(`✓ Installed ${p.name}`);
     };
-    if (!demoMode) {
-      setLoading(`Installing ${p.name}…`);
-      copilot.installPluginAsync(spec).then(result => {
-        setLoading("");
-        if (result.success) onSuccess();
-        else showToast(`✗ Install failed: ${p.name}`);
-      });
-    } else {
-      onSuccess();
-    }
-  }, [demoMode, loading, showToast]);
+    setLoading(`Installing ${p.name}…`);
+    copilot.installPluginAsync(spec).then(result => {
+      setLoading("");
+      if (result.success) onSuccess();
+      else showToast(`✗ Install failed: ${p.name}`);
+    });
+  }, [loading, showToast]);
 
   const uninstallPlugin = useCallback((p: InstalledPlugin) => {
     if (loading) return;
@@ -190,17 +162,13 @@ export default function App({ demoMode }: AppProps) {
       });
       showToast(`✓ Uninstalled ${p.name}`);
     };
-    if (!demoMode) {
-      setLoading(`Uninstalling ${p.name}…`);
-      copilot.uninstallPluginAsync(spec).then(result => {
-        setLoading("");
-        if (result.success) onSuccess();
-        else showToast(`✗ Uninstall failed: ${p.name}`);
-      });
-    } else {
-      onSuccess();
-    }
-  }, [demoMode, loading, showToast]);
+    setLoading(`Uninstalling ${p.name}…`);
+    copilot.uninstallPluginAsync(spec).then(result => {
+      setLoading("");
+      if (result.success) onSuccess();
+      else showToast(`✗ Uninstall failed: ${p.name}`);
+    });
+  }, [loading, showToast]);
 
   const enablePlugin = useCallback((p: InstalledPlugin) => {
     if (loading) return;
@@ -211,17 +179,13 @@ export default function App({ demoMode }: AppProps) {
       ));
       showToast(`✓ Enabled ${p.name}`);
     };
-    if (!demoMode) {
-      setLoading(`Enabling ${p.name}…`);
-      copilot.enablePluginAsync(spec).then(result => {
-        setLoading("");
-        if (result.success) onSuccess();
-        else showToast(`✗ Enable failed: ${p.name}`);
-      });
-    } else {
-      onSuccess();
-    }
-  }, [demoMode, loading, showToast]);
+    setLoading(`Enabling ${p.name}…`);
+    copilot.enablePluginAsync(spec).then(result => {
+      setLoading("");
+      if (result.success) onSuccess();
+      else showToast(`✗ Enable failed: ${p.name}`);
+    });
+  }, [loading, showToast]);
 
   const disablePlugin = useCallback((p: InstalledPlugin) => {
     if (loading) return;
@@ -232,17 +196,13 @@ export default function App({ demoMode }: AppProps) {
       ));
       showToast(`✓ Disabled ${p.name}`);
     };
-    if (!demoMode) {
-      setLoading(`Disabling ${p.name}…`);
-      copilot.disablePluginAsync(spec).then(result => {
-        setLoading("");
-        if (result.success) onSuccess();
-        else showToast(`✗ Disable failed: ${p.name}`);
-      });
-    } else {
-      onSuccess();
-    }
-  }, [demoMode, loading, showToast]);
+    setLoading(`Disabling ${p.name}…`);
+    copilot.disablePluginAsync(spec).then(result => {
+      setLoading("");
+      if (result.success) onSuccess();
+      else showToast(`✗ Disable failed: ${p.name}`);
+    });
+  }, [loading, showToast]);
 
   const updatePlugin = useCallback((p: InstalledPlugin) => {
     if (!p.updateAvailable || loading) return;
@@ -253,17 +213,13 @@ export default function App({ demoMode }: AppProps) {
       ));
       showToast(`✓ Updated ${p.name}`);
     };
-    if (!demoMode) {
-      setLoading(`Updating ${p.name}…`);
-      copilot.updatePluginAsync(spec).then(result => {
-        setLoading("");
-        if (result.success) onSuccess();
-        else showToast(`✗ Update failed: ${p.name}`);
-      });
-    } else {
-      onSuccess();
-    }
-  }, [demoMode, loading, showToast]);
+    setLoading(`Updating ${p.name}…`);
+    copilot.updatePluginAsync(spec).then(result => {
+      setLoading("");
+      if (result.success) onSuccess();
+      else showToast(`✗ Update failed: ${p.name}`);
+    });
+  }, [loading, showToast]);
 
   // Get filtered lists for cursor bounds
   const filteredInstalled = useMemo(
@@ -398,65 +354,45 @@ export default function App({ demoMode }: AppProps) {
           setMarketplaces((prev) => [...prev, newMp]);
           showToast(`✓ Added marketplace ${name}`);
           const installedNames = new Set(plugins.map((p) => p.name));
-          if (!demoMode) {
-            setMpPlugins((prev) => ({ ...prev, [name]: [] }));
-            copilot.browseMarketplaceAsync(name, installedNames).then((items) => {
-              if (items.length > 0) {
-                config.persistMarketplacePlugins(name, items);
-                setMpPlugins((prev) => ({ ...prev, [name]: items }));
-              } else {
-                // CLI returned nothing — try persisted data
-                const persisted = config.loadMarketplacePlugins();
-                if (persisted[name]?.length) {
-                  setMpPlugins((prev) => ({ ...prev, [name]: persisted[name]! }));
-                }
-              }
-            });
-          } else {
-            // Demo mode: use demo data, then persisted config
-            const demoPlugins = demo.demoMarketplacePlugins(name);
-            if (demoPlugins.length > 0) {
-              setMpPlugins((prev) => ({ ...prev, [name]: demoPlugins }));
+          setMpPlugins((prev) => ({ ...prev, [name]: [] }));
+          copilot.browseMarketplaceAsync(name, installedNames).then((items) => {
+            if (items.length > 0) {
+              config.persistMarketplacePlugins(name, items);
+              setMpPlugins((prev) => ({ ...prev, [name]: items }));
             } else {
               const persisted = config.loadMarketplacePlugins();
-              setMpPlugins((prev) => ({ ...prev, [name]: persisted[name] || [] }));
-            }
-          }
-        };
-        if (!demoMode) {
-          setLoading(`Adding marketplace ${spec}…`);
-          const result = copilot.addMarketplace(spec);
-          setLoading("");
-          if (result.success) {
-            // Re-list marketplaces from CLI to get the correct name
-            copilot.listMarketplacesAsync().then((fresh) => {
-              const existing = new Set(marketplaces.map((m) => m.name));
-              // Find newly added, or match by spec (could be short name or owner/repo)
-              const added = fresh.find((m) => !existing.has(m.name))
-                || fresh.find((m) => m.name === spec || m.url.endsWith(`/${spec}`));
-              if (added && !existing.has(added.name)) {
-                onSuccess(added.name, added.url);
-              } else if (added) {
-                // Already in our list — just browse to refresh plugins
-                const installedNames = new Set(plugins.map((p) => p.name));
-                copilot.browseMarketplaceAsync(added.name, installedNames).then((items) => {
-                  if (items.length > 0) {
-                    config.persistMarketplacePlugins(added.name, items);
-                    setMpPlugins((prev) => ({ ...prev, [added.name]: items }));
-                  }
-                });
-                showToast(`✓ Refreshed ${added.name}`);
-              } else {
-                onSuccess(spec, `https://github.com/${spec}`);
+              if (persisted[name]?.length) {
+                setMpPlugins((prev) => ({ ...prev, [name]: persisted[name]! }));
               }
-            });
-          } else {
-            showToast(`✗ Add failed: ${spec}`);
-          }
+            }
+          });
+        };
+        setLoading(`Adding marketplace ${spec}…`);
+        const result = copilot.addMarketplace(spec);
+        setLoading("");
+        if (result.success) {
+          // Re-list marketplaces from CLI to get the correct name
+          copilot.listMarketplacesAsync().then((fresh) => {
+            const existing = new Set(marketplaces.map((m) => m.name));
+            const added = fresh.find((m) => !existing.has(m.name))
+              || fresh.find((m) => m.name === spec || m.url.endsWith(`/${spec}`));
+            if (added && !existing.has(added.name)) {
+              onSuccess(added.name, added.url);
+            } else if (added) {
+              const installedNames = new Set(plugins.map((p) => p.name));
+              copilot.browseMarketplaceAsync(added.name, installedNames).then((items) => {
+                if (items.length > 0) {
+                  config.persistMarketplacePlugins(added.name, items);
+                  setMpPlugins((prev) => ({ ...prev, [added.name]: items }));
+                }
+              });
+              showToast(`✓ Refreshed ${added.name}`);
+            } else {
+              onSuccess(spec, `https://github.com/${spec}`);
+            }
+          });
         } else {
-          const name = spec;
-          const url = `https://github.com/${spec}`;
-          onSuccess(name, url);
+          showToast(`✗ Add failed: ${spec}`);
         }
         return;
       }
@@ -507,7 +443,7 @@ export default function App({ demoMode }: AppProps) {
           if (action?.id === "marketplace") { setScreen("marketplace"); setMpFocus("tabbar"); }
           if (action?.id === "installed") setScreen("installed");
           if (action?.id === "settings") setScreen("settings");
-          if (action?.id === "updates") showToast("✓ All plugins up to date (demo)");
+          if (action?.id === "updates") showToast("✓ All plugins up to date");
         }
         break;
       }
@@ -621,15 +557,11 @@ export default function App({ demoMode }: AppProps) {
               setSettingsCursor((c) => Math.max(0, Math.min(c, marketplaces.length - 2)));
               showToast(`✓ Removed ${mp.name}`);
             };
-            if (!demoMode) {
-              setLoading(`Removing ${mp.name}…`);
-              const result = copilot.removeMarketplace(mp.name);
-              setLoading("");
-              if (result.success) onSuccess();
-              else showToast(`✗ Remove failed: ${mp.name}`);
-            } else {
-              onSuccess();
-            }
+            setLoading(`Removing ${mp.name}…`);
+            const result = copilot.removeMarketplace(mp.name);
+            setLoading("");
+            if (result.success) onSuccess();
+            else showToast(`✗ Remove failed: ${mp.name}`);
           }
         }
         break;
