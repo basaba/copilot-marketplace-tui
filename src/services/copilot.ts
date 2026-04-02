@@ -99,8 +99,8 @@ function parseMarketplaces(out: string): Marketplace[] {
 }
 
 // Browse marketplace plugins via gh API, falling back to copilot CLI.
-// Fetches the plugins/ directory listing from the GitHub repo, then
-// fetches each plugin's README first line for its description.
+// Phase 1: fetch plugin names instantly via Git Trees API (single call).
+// Phase 2: caller can backfill descriptions via fetchDescriptionsAsync.
 export async function browseMarketplaceAsync(
   name: string,
   installedNames: Set<string>,
@@ -117,6 +117,15 @@ export async function browseMarketplaceAsync(
   return parseBrowse(out, name, installedNames);
 }
 
+/** Backfill descriptions using copilot CLI (returns full name+desc list). */
+export async function fetchDescriptionsAsync(
+  name: string,
+  installedNames: Set<string>,
+): Promise<MarketplacePlugin[]> {
+  const out = await runAsync(`copilot plugin marketplace browse ${name}`);
+  return parseBrowse(out, name, installedNames);
+}
+
 async function browseViaGhApi(
   marketplace: string,
   url: string,
@@ -125,48 +134,20 @@ async function browseViaGhApi(
   const repo = repoFromUrl(url);
   if (!repo) throw new Error("Cannot extract repo from URL");
 
-  // List plugin directories
-  const raw = await ghApi(`repos/${repo}/contents/plugins`);
-  const entries: Array<{ name: string; type: string }> = JSON.parse(raw);
-  const dirs = entries.filter((e) => e.type === "dir").map((e) => e.name);
+  // Single API call: get the full repo tree and extract plugin directory names
+  const raw = await ghApi(
+    `repos/${repo}/git/trees/main?recursive=1`,
+    '[.tree[] | select(.type == "tree") | select(.path | test("^plugins/[^/]+$")) | .path] | map(split("/")[1])',
+  );
+  const dirs: string[] = JSON.parse(raw);
 
-  // Fetch README descriptions in parallel (batched to avoid rate limits)
-  const plugins: MarketplacePlugin[] = [];
-  const BATCH = 10;
-  for (let i = 0; i < dirs.length; i += BATCH) {
-    const batch = dirs.slice(i, i + BATCH);
-    const results = await Promise.all(
-      batch.map(async (pluginName) => {
-        let description = "";
-        try {
-          const readmeRaw = await ghApi(
-            `repos/${repo}/contents/plugins/${pluginName}/README.md`,
-            ".content",
-          );
-          const readme = Buffer.from(readmeRaw.replace(/\n/g, ""), "base64").toString("utf-8");
-          // Extract first non-heading, non-empty line as description
-          for (const line of readme.split("\n")) {
-            const trimmed = line.trim();
-            if (trimmed && !trimmed.startsWith("#")) {
-              description = trimmed;
-              break;
-            }
-          }
-        } catch {
-          // No README — leave description empty
-        }
-        return {
-          name: pluginName,
-          description,
-          version: "",
-          installed: installedNames.has(pluginName),
-          marketplace,
-        };
-      }),
-    );
-    plugins.push(...results);
-  }
-  return plugins;
+  return dirs.map((pluginName) => ({
+    name: pluginName,
+    description: "",
+    version: "",
+    installed: installedNames.has(pluginName),
+    marketplace,
+  }));
 }
 
 function parseBrowse(out: string, marketplace: string, installedNames: Set<string>): MarketplacePlugin[] {

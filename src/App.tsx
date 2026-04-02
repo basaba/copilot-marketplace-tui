@@ -42,26 +42,13 @@ async function loadDataAsync(): Promise<AppData> {
     copilot.listMarketplacesAsync(),
   ]);
   const marketplaces = config.applyConfig(rawMarketplaces);
-  const installedNames = new Set(plugins.map((p) => p.name));
+  // Start with persisted plugin lists — actual data is loaded lazily per marketplace
   const persisted = config.loadMarketplacePlugins();
-  const errors: string[] = [];
-  const mpEntries = await Promise.all(
-    marketplaces.map(async (mp) => {
-      try {
-        const items = await copilot.browseMarketplaceAsync(mp.name, installedNames, mp.url);
-        // Fall back to persisted plugin list if CLI returns nothing
-        return [mp.name, items.length > 0 ? items : (persisted[mp.name] || [])] as const;
-      } catch {
-        errors.push(`Failed to browse "${mp.name}" — check copilot login context`);
-        return [mp.name, persisted[mp.name] || []] as const;
-      }
-    })
-  );
   const mpPlugins: Record<string, MarketplacePlugin[]> = {};
-  for (const [name, items] of mpEntries) {
-    mpPlugins[name] = items;
+  for (const mp of marketplaces) {
+    mpPlugins[mp.name] = persisted[mp.name] || [];
   }
-  return { plugins, marketplaces, mpPlugins, errors };
+  return { plugins, marketplaces, mpPlugins, errors: [] };
 }
 
 export default function App() {
@@ -75,6 +62,16 @@ export default function App() {
   const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
   const [mpPlugins, setMpPlugins] = useState<Record<string, MarketplacePlugin[]>>({});
+
+  // Toast
+  const [toast, setToast] = useState("");
+  // Loading state for async CLI operations
+  const [loading, setLoading] = useState("");
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  }, []);
 
   useEffect(() => {
     loadDataAsync().then((data) => {
@@ -106,6 +103,47 @@ export default function App() {
   const [mpFocus, setMpFocus] = useState<"tabbar" | "content">("tabbar");
   const [settingsCursor, setSettingsCursor] = useState(0);
 
+  // Track which marketplaces have been fetched to avoid redundant loads
+  const [mpFetched, setMpFetched] = useState<Set<string>>(new Set());
+  const [mpLoading, setMpLoading] = useState<Set<string>>(new Set());
+  // Track which marketplaces have had descriptions backfilled
+  const [mpDescFetched, setMpDescFetched] = useState<Set<string>>(new Set());
+
+  // Lazy-load marketplace plugins when the user navigates to the marketplace view
+  // Phase 1: fast — fetch plugin names via Git Trees API (single call)
+  // Phase 2: background — backfill descriptions via copilot CLI
+  useEffect(() => {
+    if (screen !== "marketplace" || marketplaces.length === 0) return;
+    const mp = marketplaces[mpTab];
+    if (!mp || mpFetched.has(mp.name) || mpLoading.has(mp.name)) return;
+    setMpLoading((prev) => new Set(prev).add(mp.name));
+    const installedNames = new Set(plugins.map((p) => p.name));
+
+    // Phase 1: get plugin names instantly
+    copilot.browseMarketplaceAsync(mp.name, installedNames, mp.url).then((items) => {
+      if (items.length > 0) {
+        setMpPlugins((prev) => ({ ...prev, [mp.name]: items }));
+      }
+      setMpFetched((prev) => new Set(prev).add(mp.name));
+      setMpLoading((prev) => { const next = new Set(prev); next.delete(mp.name); return next; });
+
+      // Phase 2: backfill descriptions in the background
+      copilot.fetchDescriptionsAsync(mp.name, installedNames).then((withDescs) => {
+        if (withDescs.length > 0) {
+          config.persistMarketplacePlugins(mp.name, withDescs);
+          setMpPlugins((prev) => ({ ...prev, [mp.name]: withDescs }));
+        }
+        setMpDescFetched((prev) => new Set(prev).add(mp.name));
+      }).catch(() => {
+        // Descriptions failed — names are still shown, not critical
+      });
+    }).catch(() => {
+      showToast(`✗ Failed to browse "${mp.name}"`);
+      setMpFetched((prev) => new Set(prev).add(mp.name));
+      setMpLoading((prev) => { const next = new Set(prev); next.delete(mp.name); return next; });
+    });
+  }, [screen, mpTab, marketplaces, mpFetched, mpLoading, plugins, showToast]);
+
   // Search state
   const [instSearch, setInstSearch] = useState("");
   const [instSearchActive, setInstSearchActive] = useState(false);
@@ -115,16 +153,6 @@ export default function App() {
   // Settings: add marketplace input state
   const [addMpActive, setAddMpActive] = useState(false);
   const [addMpValue, setAddMpValue] = useState("");
-
-  // Toast
-  const [toast, setToast] = useState("");
-  // Loading state for async CLI operations
-  const [loading, setLoading] = useState("");
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
-  }, []);
 
   // Plugin action handlers
   const installPlugin = useCallback((p: MarketplacePlugin) => {
@@ -642,6 +670,7 @@ export default function App() {
             }}
             contentFocused={mpFocus === "content"}
             termHeight={termHeight}
+            loadingMarketplaces={mpLoading}
           />
         );
       case "settings":

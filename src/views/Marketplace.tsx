@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import Spinner from "ink-spinner";
 import { colors } from "../theme.js";
 import { SearchBar, Table, StatusBar } from "../components/index.js";
 import type { MarketplacePlugin, Marketplace } from "../types.js";
@@ -14,6 +15,7 @@ interface MarketplaceViewProps {
   onSearchChange: (query: string) => void;
   contentFocused?: boolean;
   termHeight?: number;
+  loadingMarketplaces?: Set<string>;
 }
 
 const columns = [
@@ -49,6 +51,7 @@ export default function MarketplaceView({
   onSearchChange,
   contentFocused = false,
   termHeight,
+  loadingMarketplaces,
 }: MarketplaceViewProps) {
   const tableHeight = termHeight ? Math.max(5, termHeight - MARKETPLACE_CHROME) : undefined;
   if (marketplaces.length === 0) {
@@ -73,6 +76,8 @@ export default function MarketplaceView({
     version: p.version,
     status: p.installed ? "✓ installed" : "",
   }));
+
+  const isLoading = loadingMarketplaces?.has(activeMarketplace);
 
   return (
     <Box flexDirection="column">
@@ -114,7 +119,14 @@ export default function MarketplaceView({
       />
 
       <Box marginTop={1}>
-        <Table columns={columns} rows={rows} cursor={cursor} height={tableHeight} />
+        {isLoading && rows.length === 0 ? (
+          <Box paddingX={2}>
+            <Text color={colors.accent}><Spinner type="dots" /></Text>
+            <Text color={colors.textDim}> Loading plugins…</Text>
+          </Box>
+        ) : (
+          <Table columns={columns} rows={rows} cursor={cursor} height={tableHeight} />
+        )}
       </Box>
 
       <StatusBar
