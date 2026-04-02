@@ -276,3 +276,17 @@ export function removeMarketplace(name: string): { success: boolean; message: st
     return { success: false, message: `✗ Remove marketplace failed: ${e}` };
   }
 }
+
+/** Fetch a plugin's README.md from its marketplace repo via gh API. */
+export async function fetchPluginReadmeAsync(
+  pluginName: string,
+  marketplaceUrl: string,
+): Promise<string> {
+  const repo = repoFromUrl(marketplaceUrl);
+  if (!repo) return "";
+  const raw = await ghApi(
+    `repos/${repo}/contents/plugins/${pluginName}/README.md`,
+    ".content",
+  );
+  return Buffer.from(raw.replace(/\n/g, ""), "base64").toString("utf-8");
+}

@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
 import Spinner from "ink-spinner";
+import { marked } from "marked";
+import { markedTerminal } from "marked-terminal";
 import { TabBar } from "./components/index.js";
 import {
   Dashboard,
@@ -13,11 +15,14 @@ import { quickActions } from "./views/Dashboard.js";
 import { filterPlugins as filterInstalled, INSTALLED_CHROME } from "./views/Installed.js";
 import { filterPlugins as filterMarketplace, MARKETPLACE_CHROME } from "./views/Marketplace.js";
 import { copilot, config } from "./services/index.js";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+marked.use(markedTerminal() as any);
 import type { Screen, InstalledPlugin, MarketplacePlugin, Marketplace, PluginSummary } from "./types.js";
 
 type DetailTarget =
-  | { source: "installed"; plugin: InstalledPlugin }
-  | { source: "marketplace"; plugin: MarketplacePlugin };
+  | { source: "installed"; plugin: InstalledPlugin; marketplaceUrl?: string }
+  | { source: "marketplace"; plugin: MarketplacePlugin; marketplaceUrl?: string };
 
 type AppData = {
   plugins: InstalledPlugin[];
@@ -94,6 +99,35 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [detail, setDetail] = useState<DetailTarget | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [detailReadme, setDetailReadme] = useState<string | null>(null);
+  const [detailReadmeLoading, setDetailReadmeLoading] = useState(false);
+  const [detailScroll, setDetailScroll] = useState(0);
+  const [detailSearchActive, setDetailSearchActive] = useState(false);
+  const [detailSearchQuery, setDetailSearchQuery] = useState("");
+
+  // Fetch README when detail view opens
+  useEffect(() => {
+    if (!showDetail || !detail) {
+      setDetailReadme(null);
+      setDetailScroll(0);
+      setDetailSearchActive(false);
+      setDetailSearchQuery("");
+      return;
+    }
+    const pluginName = detail.plugin.name;
+    const url = detail.marketplaceUrl;
+    if (!url) return;
+    setDetailReadme(null);
+    setDetailReadmeLoading(true);
+    setDetailScroll(0);
+    copilot.fetchPluginReadmeAsync(pluginName, url).then((md) => {
+      setDetailReadme(md);
+      setDetailReadmeLoading(false);
+    }).catch(() => {
+      setDetailReadme(null);
+      setDetailReadmeLoading(false);
+    });
+  }, [showDetail, detail]);
 
   // Cursors per screen
   const [dashCursor, setDashCursor] = useState(0);
@@ -281,8 +315,53 @@ export default function App() {
 
     // Detail view keybindings
     if (showDetail) {
+      // Search input mode
+      if (detailSearchActive) {
+        if (key.escape) {
+          setDetailSearchActive(false);
+          return;
+        }
+        if (key.return) {
+          setDetailSearchActive(false);
+          return;
+        }
+        // Let TextInput handle the rest via onSearchChange
+        return;
+      }
+
       if (key.escape) {
-        setShowDetail(false);
+        if (detailSearchQuery) {
+          setDetailSearchQuery("");
+        } else {
+          setShowDetail(false);
+        }
+        return;
+      }
+      if (key.upArrow) { setDetailScroll((s) => Math.max(0, s - 1)); return; }
+      if (key.downArrow) { setDetailScroll((s) => s + 1); return; }
+      if (key.pageUp || input === "b") { setDetailScroll((s) => Math.max(0, s - (termHeight - 16))); return; }
+      if (key.pageDown || input === " ") { setDetailScroll((s) => s + (termHeight - 16)); return; }
+      if (input === "/") { setDetailSearchActive(true); return; }
+      // n/N: jump to next/prev search match
+      if ((input === "n" || input === "N") && detailSearchQuery && detailReadme) {
+        const rendered = (marked.parse(detailReadme) as string).trimEnd();
+        const lines = rendered.split("\n");
+        const q = detailSearchQuery.toLowerCase();
+        const matchIdxs: number[] = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i]!.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").toLowerCase().includes(q)) {
+            matchIdxs.push(i);
+          }
+        }
+        if (matchIdxs.length > 0) {
+          if (input === "n") {
+            const next = matchIdxs.find((l) => l > detailScroll) ?? matchIdxs[0]!;
+            setDetailScroll(next);
+          } else {
+            const prev = [...matchIdxs].reverse().find((l) => l < detailScroll) ?? matchIdxs[matchIdxs.length - 1]!;
+            setDetailScroll(prev);
+          }
+        }
         return;
       }
       if (detail?.source === "installed") {
@@ -327,10 +406,10 @@ export default function App() {
         setInstSearchActive(false);
         const p = filteredInstalled[instCursor];
         if (p) {
-          setDetail({ source: "installed", plugin: p });
+          const mpUrl = marketplaces.find((m) => m.name === p.marketplace)?.url;
+          setDetail({ source: "installed", plugin: p, marketplaceUrl: mpUrl });
           setShowDetail(true);
         }
-        return;
       }
       // All other keys go to TextInput (handled by Ink)
       return;
@@ -362,7 +441,8 @@ export default function App() {
         setMpSearchActive(false);
         const p = filteredMp[mpCursor];
         if (p) {
-          setDetail({ source: "marketplace", plugin: p });
+          const mpUrl = marketplaces[mpTab]?.url;
+          setDetail({ source: "marketplace", plugin: p, marketplaceUrl: mpUrl });
           setShowDetail(true);
         }
         return;
@@ -516,7 +596,7 @@ export default function App() {
         if (key.return) {
           const p = filteredInstalled[instCursor];
           if (p) {
-            setDetail({ source: "installed", plugin: p });
+            setDetail({ source: "installed", plugin: p, marketplaceUrl: marketplaces.find((m) => m.name === p.marketplace)?.url });
             setShowDetail(true);
           }
         }
@@ -568,7 +648,7 @@ export default function App() {
           if (key.return) {
             const p = filteredMp[mpCursor];
             if (p) {
-              setDetail({ source: "marketplace", plugin: p });
+              setDetail({ source: "marketplace", plugin: p, marketplaceUrl: marketplaces[mpTab]?.url });
               setShowDetail(true);
             }
           }
@@ -628,6 +708,14 @@ export default function App() {
         <DetailView
           plugin={detail?.plugin || null}
           source={detail?.source || "installed"}
+          readme={detailReadme}
+          readmeLoading={detailReadmeLoading}
+          termHeight={termHeight}
+          scrollOffset={detailScroll}
+          searchQuery={detailSearchQuery}
+          searchActive={detailSearchActive}
+          onSearchChange={setDetailSearchQuery}
+          onScrollTo={setDetailScroll}
         />
       );
     }

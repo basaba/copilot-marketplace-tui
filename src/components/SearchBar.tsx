@@ -21,18 +21,23 @@ export default function SearchBar({
       borderStyle="round"
       borderColor={active ? colors.primary : colors.border}
       paddingX={1}
+      width={40}
+      overflow="hidden"
     >
       <Text color={colors.primary}>🔍 </Text>
-      {active ? (
+      <Text wrap="truncate-end">
+        {active ? undefined : (
+          <Text color={value ? colors.text : colors.textDim}>
+            {value || placeholder}
+          </Text>
+        )}
+      </Text>
+      {active && (
         <TextInput
           value={value}
           onChange={onChange}
           placeholder={placeholder}
         />
-      ) : (
-        <Text color={value ? colors.text : colors.textDim}>
-          {value || placeholder}
-        </Text>
       )}
     </Box>
   );
