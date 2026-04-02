@@ -23,6 +23,7 @@ type AppData = {
   plugins: InstalledPlugin[];
   marketplaces: Marketplace[];
   mpPlugins: Record<string, MarketplacePlugin[]>;
+  errors: string[];
 };
 
 function computeSummary(plugins: InstalledPlugin[], marketplaces: Marketplace[]): PluginSummary {
@@ -43,18 +44,24 @@ async function loadDataAsync(): Promise<AppData> {
   const marketplaces = config.applyConfig(rawMarketplaces);
   const installedNames = new Set(plugins.map((p) => p.name));
   const persisted = config.loadMarketplacePlugins();
+  const errors: string[] = [];
   const mpEntries = await Promise.all(
     marketplaces.map(async (mp) => {
-      const items = await copilot.browseMarketplaceAsync(mp.name, installedNames);
-      // Fall back to persisted plugin list if CLI returns nothing
-      return [mp.name, items.length > 0 ? items : (persisted[mp.name] || [])] as const;
+      try {
+        const items = await copilot.browseMarketplaceAsync(mp.name, installedNames, mp.url);
+        // Fall back to persisted plugin list if CLI returns nothing
+        return [mp.name, items.length > 0 ? items : (persisted[mp.name] || [])] as const;
+      } catch {
+        errors.push(`Failed to browse "${mp.name}" — check copilot login context`);
+        return [mp.name, persisted[mp.name] || []] as const;
+      }
     })
   );
   const mpPlugins: Record<string, MarketplacePlugin[]> = {};
   for (const [name, items] of mpEntries) {
     mpPlugins[name] = items;
   }
-  return { plugins, marketplaces, mpPlugins };
+  return { plugins, marketplaces, mpPlugins, errors };
 }
 
 export default function App() {
@@ -75,6 +82,9 @@ export default function App() {
       setMarketplaces(data.marketplaces);
       setMpPlugins(data.mpPlugins);
       setReady(true);
+      if (data.errors.length > 0) {
+        showToast(data.errors.join("; "));
+      }
     });
   }, []);
 
@@ -355,7 +365,7 @@ export default function App() {
           showToast(`✓ Added marketplace ${name}`);
           const installedNames = new Set(plugins.map((p) => p.name));
           setMpPlugins((prev) => ({ ...prev, [name]: [] }));
-          copilot.browseMarketplaceAsync(name, installedNames).then((items) => {
+          copilot.browseMarketplaceAsync(name, installedNames, url).then((items) => {
             if (items.length > 0) {
               config.persistMarketplacePlugins(name, items);
               setMpPlugins((prev) => ({ ...prev, [name]: items }));
@@ -364,6 +374,12 @@ export default function App() {
               if (persisted[name]?.length) {
                 setMpPlugins((prev) => ({ ...prev, [name]: persisted[name]! }));
               }
+            }
+          }).catch(() => {
+            showToast(`✗ Failed to browse "${name}" — check copilot login`);
+            const persisted = config.loadMarketplacePlugins();
+            if (persisted[name]?.length) {
+              setMpPlugins((prev) => ({ ...prev, [name]: persisted[name]! }));
             }
           });
         };
@@ -380,15 +396,24 @@ export default function App() {
               onSuccess(added.name, added.url);
             } else if (added) {
               const installedNames = new Set(plugins.map((p) => p.name));
-              copilot.browseMarketplaceAsync(added.name, installedNames).then((items) => {
+              copilot.browseMarketplaceAsync(added.name, installedNames, added.url).then((items) => {
                 if (items.length > 0) {
                   config.persistMarketplacePlugins(added.name, items);
                   setMpPlugins((prev) => ({ ...prev, [added.name]: items }));
                 }
+              }).catch(() => {
+                showToast(`✗ Failed to browse "${added.name}" — check copilot login`);
               });
               showToast(`✓ Refreshed ${added.name}`);
             } else {
-              onSuccess(spec, `https://github.com/${spec}`);
+              // CLI accepted the add but we can't resolve the name — use the
+              // full fresh list instead of guessing from the raw user input.
+              const newOnes = fresh.filter((m) => !existing.has(m.name));
+              if (newOnes.length === 1) {
+                onSuccess(newOnes[0]!.name, newOnes[0]!.url);
+              } else {
+                showToast(`✗ Marketplace added but could not resolve name for "${spec}"`);
+              }
             }
           });
         } else {

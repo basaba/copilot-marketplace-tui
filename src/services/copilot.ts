@@ -22,6 +22,17 @@ function runAsync(cmd: string): Promise<string> {
   });
 }
 
+function ghApi(endpoint: string, jq?: string): Promise<string> {
+  const jqArg = jq ? ` --jq '${jq}'` : "";
+  return runAsync(`gh api ${endpoint}${jqArg}`);
+}
+
+/** Extract owner/repo from a marketplace URL like https://github.com/owner/repo */
+function repoFromUrl(url: string): string | null {
+  const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
+  return match ? match[1]! : null;
+}
+
 // Parse "copilot plugin list" output:
 //   Installed plugins:
 //     • workiq@copilot-plugins (v1.0.0)
@@ -75,7 +86,7 @@ function parseMarketplaces(out: string): Marketplace[] {
   if (!out) return [];
   const marketplaces: Marketplace[] = [];
   for (const line of out.split("\n")) {
-    const match = line.match(/◆\s+(\S+)\s+\(GitHub:\s+(\S+)\)/);
+    const match = line.match(/[◆•]\s+(\S+)\s+\(GitHub:\s+(\S+)\)/);
     if (match) {
       const [, name, repo] = match;
       marketplaces.push({
@@ -87,24 +98,75 @@ function parseMarketplaces(out: string): Marketplace[] {
   return marketplaces;
 }
 
-// Parse "copilot plugin marketplace browse <name>" output:
-//   Plugins in "copilot-plugins":
-//     • workiq - WorkIQ plugin for GitHub Copilot.
-//     • spark - Spark plugin for GitHub Copilot.
-export function browseMarketplace(
+// Browse marketplace plugins via gh API, falling back to copilot CLI.
+// Fetches the plugins/ directory listing from the GitHub repo, then
+// fetches each plugin's README first line for its description.
+export async function browseMarketplaceAsync(
   name: string,
-  installedNames: Set<string>
-): MarketplacePlugin[] {
-  const out = run(`copilot plugin marketplace browse ${name}`);
+  installedNames: Set<string>,
+  url?: string,
+): Promise<MarketplacePlugin[]> {
+  if (url) {
+    try {
+      return await browseViaGhApi(name, url, installedNames);
+    } catch {
+      // fall through to CLI
+    }
+  }
+  const out = await runAsync(`copilot plugin marketplace browse ${name}`);
   return parseBrowse(out, name, installedNames);
 }
 
-export async function browseMarketplaceAsync(
-  name: string,
-  installedNames: Set<string>
+async function browseViaGhApi(
+  marketplace: string,
+  url: string,
+  installedNames: Set<string>,
 ): Promise<MarketplacePlugin[]> {
-  const out = await runAsync(`copilot plugin marketplace browse ${name}`);
-  return parseBrowse(out, name, installedNames);
+  const repo = repoFromUrl(url);
+  if (!repo) throw new Error("Cannot extract repo from URL");
+
+  // List plugin directories
+  const raw = await ghApi(`repos/${repo}/contents/plugins`);
+  const entries: Array<{ name: string; type: string }> = JSON.parse(raw);
+  const dirs = entries.filter((e) => e.type === "dir").map((e) => e.name);
+
+  // Fetch README descriptions in parallel (batched to avoid rate limits)
+  const plugins: MarketplacePlugin[] = [];
+  const BATCH = 10;
+  for (let i = 0; i < dirs.length; i += BATCH) {
+    const batch = dirs.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map(async (pluginName) => {
+        let description = "";
+        try {
+          const readmeRaw = await ghApi(
+            `repos/${repo}/contents/plugins/${pluginName}/README.md`,
+            ".content",
+          );
+          const readme = Buffer.from(readmeRaw.replace(/\n/g, ""), "base64").toString("utf-8");
+          // Extract first non-heading, non-empty line as description
+          for (const line of readme.split("\n")) {
+            const trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith("#")) {
+              description = trimmed;
+              break;
+            }
+          }
+        } catch {
+          // No README — leave description empty
+        }
+        return {
+          name: pluginName,
+          description,
+          version: "",
+          installed: installedNames.has(pluginName),
+          marketplace,
+        };
+      }),
+    );
+    plugins.push(...results);
+  }
+  return plugins;
 }
 
 function parseBrowse(out: string, marketplace: string, installedNames: Set<string>): MarketplacePlugin[] {
