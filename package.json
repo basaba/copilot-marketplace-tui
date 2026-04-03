@@ -13,8 +13,7 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/index.tsx",
-    "dev": "tsx --watch src/index.tsx",
-    "prepare": "tsc"
+    "dev": "tsx --watch src/index.tsx"
   },
   "keywords": [
     "copilot",
