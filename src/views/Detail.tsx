@@ -7,7 +7,15 @@ import { SearchBar, StatusBar } from "../components/index.js";
 import type { InstalledPlugin, MarketplacePlugin } from "../types.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-marked.use(markedTerminal() as any);
+let lastTermWidth = 0;
+function configureMarked(width: number) {
+  if (width !== lastTermWidth) {
+    // account for border (2) + paddingX (2*2) = 6 chars
+    const contentWidth = Math.max(40, width - 8);
+    marked.use(markedTerminal({ width: contentWidth }) as any);
+    lastTermWidth = width;
+  }
+}
 
 interface DetailViewProps {
   plugin: InstalledPlugin | MarketplacePlugin | null;
@@ -15,6 +23,7 @@ interface DetailViewProps {
   readme?: string | null;
   readmeLoading?: boolean;
   termHeight?: number;
+  termWidth?: number;
   scrollOffset?: number;
   searchQuery?: string;
   searchActive?: boolean;
@@ -39,7 +48,8 @@ function Field({ label, value, valueColor }: { label: string; value: string; val
   );
 }
 
-function renderReadme(md: string): string {
+function renderReadme(md: string, width: number): string {
+  configureMarked(width);
   return (marked.parse(md) as string).trimEnd();
 }
 
@@ -127,7 +137,7 @@ function highlightWord(line: string, query: string): string {
 }
 
 export default function DetailView({
-  plugin, source, readme, readmeLoading, termHeight,
+  plugin, source, readme, readmeLoading, termHeight, termWidth = 80,
   scrollOffset = 0, searchQuery = "", searchActive = false,
   onSearchChange, onScrollTo,
 }: DetailViewProps) {
@@ -148,7 +158,7 @@ export default function DetailView({
   }, [readmeLoading]);
 
   // Render README lines and find search matches
-  const rendered = useMemo(() => readme ? renderReadme(readme) : "", [readme]);
+  const rendered = useMemo(() => readme ? renderReadme(readme, termWidth) : "", [readme, termWidth]);
   const lines = useMemo(() => rendered ? rendered.split("\n") : [], [rendered]);
   const matchLines = useMemo(() => {
     if (!searchQuery || lines.length === 0) return [];
@@ -192,6 +202,14 @@ export default function DetailView({
   const viewHeight = termHeight ? Math.max(5, termHeight - (searchActive || searchQuery ? 19 : 17)) : 15;
   const maxOffset = Math.max(0, lines.length - viewHeight);
   const offset = Math.min(scrollOffset, maxOffset);
+
+  // Clamp parent scroll state when it exceeds bounds
+  useEffect(() => {
+    if (lines.length > 0 && scrollOffset > maxOffset && onScrollTo) {
+      onScrollTo(maxOffset);
+    }
+  }, [scrollOffset, maxOffset, lines.length, onScrollTo]);
+
   const visible = lines.slice(offset, offset + viewHeight);
 
   // Highlight matching words in the visible window
@@ -282,6 +300,7 @@ export default function DetailView({
           borderColor={colors.border}
           paddingX={2}
           paddingY={1}
+          overflow="hidden"
         >
           <Text>{highlightedVisible.join("\n")}</Text>
           {lines.length > viewHeight && (

@@ -711,6 +711,7 @@ export default function App() {
           readme={detailReadme}
           readmeLoading={detailReadmeLoading}
           termHeight={termHeight}
+          termWidth={termWidth}
           scrollOffset={detailScroll}
           searchQuery={detailSearchQuery}
           searchActive={detailSearchActive}
