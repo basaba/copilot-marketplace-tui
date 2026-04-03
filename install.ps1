@@ -58,18 +58,30 @@ if (Test-Path $npmGlobal) {
 Write-Host "⏳ Installing cpm from GitHub..." -ForegroundColor Yellow
 npm install -g "github:basaba/copilot-marketplace-tui"
 
-# Verify cpm is on PATH
+# Determine npm global prefix
+$npmPrefix = (npm prefix -g 2>$null).Trim()
+
+# If cpm wasn't linked, create a cmd shim manually
+$cpmShim = Join-Path $npmPrefix "cpm.cmd"
+if (-not (Test-Path $cpmShim)) {
+    $entryPoint = Join-Path $npmPrefix "node_modules\copilot-plugin-marketplace\dist\index.js"
+    if (Test-Path $entryPoint) {
+        Write-Host "⏳ Creating cpm command..." -ForegroundColor Yellow
+        "@echo off`nnode `"$entryPoint`" %*" | Set-Content $cpmShim -Encoding ASCII
+    }
+}
+
+# Refresh PATH and verify
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 if (Get-Command cpm -ErrorAction SilentlyContinue) {
     Write-Host ""
     Write-Host "✅ Installed! Run 'cpm' to launch." -ForegroundColor Green
 } else {
-    $npmBin = npm prefix -g 2>$null
     Write-Host ""
     Write-Host "✅ Installed, but 'cpm' is not on your PATH." -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Add npm's global bin directory to your PATH:" -ForegroundColor Yellow
-    Write-Host "  $npmBin" -ForegroundColor Cyan
+    Write-Host "Add npm's global directory to your PATH:" -ForegroundColor Yellow
+    Write-Host "  $npmPrefix" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Then restart your terminal." -ForegroundColor Yellow
 }

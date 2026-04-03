@@ -63,12 +63,25 @@ fi
 echo "⏳ Installing cpm from GitHub..."
 npm install -g github:basaba/copilot-marketplace-tui 2>&1
 
+# Determine npm global bin directory
+NPM_BIN="$(npm prefix -g 2>/dev/null)/bin"
+
+# If cpm binary/symlink wasn't created, create it manually
+if [ ! -e "$NPM_BIN/cpm" ]; then
+  NPM_GLOBAL="$(npm prefix -g 2>/dev/null)/lib/node_modules/copilot-plugin-marketplace"
+  if [ -f "$NPM_GLOBAL/dist/index.js" ]; then
+    echo "⏳ Creating cpm symlink..."
+    ln -sf "$NPM_GLOBAL/dist/index.js" "$NPM_BIN/cpm"
+    chmod +x "$NPM_BIN/cpm"
+  fi
+fi
+
 # Verify cpm is on PATH
+hash -r 2>/dev/null  # refresh shell command cache
 if command -v cpm &>/dev/null; then
   echo ""
   echo "✅ Installed! Run 'cpm' to launch."
 else
-  NPM_BIN=$(npm bin -g 2>/dev/null || npm prefix -g 2>/dev/null | xargs -I{} echo "{}/bin")
   echo ""
   echo "✅ Installed, but 'cpm' is not on your PATH."
   echo ""
@@ -76,5 +89,5 @@ else
   echo ""
   echo "  export PATH=\"\$PATH:$NPM_BIN\""
   echo ""
-  echo "Then restart your terminal or run: source ~/.bashrc"
+  echo "Then run: source ~/.bashrc"
 fi
