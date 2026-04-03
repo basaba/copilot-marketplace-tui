@@ -11,7 +11,6 @@ import {
   DetailView,
   SettingsView,
 } from "./views/index.js";
-import { quickActions } from "./views/Dashboard.js";
 import { filterPlugins as filterInstalled, INSTALLED_CHROME } from "./views/Installed.js";
 import { filterPlugins as filterMarketplace, MARKETPLACE_CHROME } from "./views/Marketplace.js";
 import { copilot, config } from "./services/index.js";
@@ -130,7 +129,6 @@ export default function App() {
   }, [showDetail, detail]);
 
   // Cursors per screen
-  const [dashCursor, setDashCursor] = useState(0);
   const [instCursor, setInstCursor] = useState(0);
   const [mpCursor, setMpCursor] = useState(0);
   const [mpTab, setMpTab] = useState(0);
@@ -572,17 +570,6 @@ export default function App() {
     // Per-screen keybindings
     switch (screen) {
       case "dashboard": {
-        if (key.upArrow || input === "k")
-          setDashCursor((c) => Math.max(0, c - 1));
-        if (key.downArrow || input === "j")
-          setDashCursor((c) => Math.min(quickActions.length - 1, c + 1));
-        if (key.return) {
-          const action = quickActions[dashCursor];
-          if (action?.id === "marketplace") { setScreen("marketplace"); setMpFocus("tabbar"); }
-          if (action?.id === "installed") setScreen("installed");
-          if (action?.id === "settings") setScreen("settings");
-          if (action?.id === "updates") showToast("✓ All plugins up to date");
-        }
         break;
       }
       case "installed": {
@@ -734,8 +721,6 @@ export default function App() {
         return (
           <Dashboard
             summary={summary}
-            cursor={dashCursor}
-            onAction={() => {}}
           />
         );
       case "installed":

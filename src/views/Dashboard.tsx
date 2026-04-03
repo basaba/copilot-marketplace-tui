@@ -6,16 +6,7 @@ import type { PluginSummary } from "../types.js";
 
 interface DashboardProps {
   summary: PluginSummary;
-  cursor: number;
-  onAction: (action: string) => void;
 }
-
-const quickActions = [
-  { id: "marketplace", label: "Browse Marketplace", desc: "Discover and install new plugins" },
-  { id: "installed", label: "Manage Installed", desc: "View and configure installed plugins" },
-  { id: "updates", label: "Check Updates", desc: "Check for plugin updates" },
-  { id: "settings", label: "Settings", desc: "Configure CPM preferences" },
-];
 
 interface StatCardProps {
   value: number;
@@ -42,7 +33,7 @@ function StatCard({ value, label, color }: StatCardProps) {
   );
 }
 
-export default function Dashboard({ summary, cursor }: DashboardProps) {
+export default function Dashboard({ summary }: DashboardProps) {
   return (
     <Box flexDirection="column">
       {/* Stat cards */}
@@ -53,36 +44,8 @@ export default function Dashboard({ summary, cursor }: DashboardProps) {
         <StatCard value={summary.updatesAvailable} label="Updates" color={colors.danger} />
       </Box>
 
-      {/* Quick actions */}
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor={colors.border}
-        paddingX={2}
-        paddingY={1}
-      >
-        <Text bold color={colors.text} >
-          Quick Actions
-        </Text>
-        <Box flexDirection="column" marginTop={1}>
-          {quickActions.map((action, i) => {
-            const selected = i === cursor;
-            return (
-              <Box key={action.id} gap={1}>
-                <Text bold={selected} color={selected ? colors.primary : colors.text}>
-                  {selected ? "▸" : " "} {action.label}
-                </Text>
-                <Text color={colors.textDim}>{action.desc}</Text>
-              </Box>
-            );
-          })}
-        </Box>
-      </Box>
-
       <StatusBar
         items={[
-          { key: "↑/↓", desc: "navigate" },
-          { key: "enter", desc: "select" },
           { key: "←/→", desc: "switch view" },
           { key: "q", desc: "quit" },
         ]}
@@ -90,5 +53,3 @@ export default function Dashboard({ summary, cursor }: DashboardProps) {
     </Box>
   );
 }
-
-export { quickActions };
