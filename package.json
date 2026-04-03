@@ -6,10 +6,15 @@
   "bin": {
     "cpm": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "tsx src/index.tsx",
-    "dev": "tsx --watch src/index.tsx"
+    "dev": "tsx --watch src/index.tsx",
+    "prepare": "tsc"
   },
   "keywords": [
     "copilot",

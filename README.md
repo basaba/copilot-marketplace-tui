@@ -17,18 +17,35 @@ Built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs) and TypeS
 ## Prerequisites
 
 - Node.js 18+
-- GitHub Copilot CLI installed and configured (`copilot` binary in PATH) — not needed for demo mode
+- GitHub CLI (`gh`) installed and authenticated
+- GitHub Copilot CLI installed and configured (`copilot` binary in PATH)
 
-## Quick Start
+## Install
 
+**macOS / Linux:**
 ```bash
-npm install
-npm start -- --demo    # Run in demo mode with sample data
+curl -fsSL https://raw.githubusercontent.com/basaba/copilot-marketplace-tui/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/basaba/copilot-marketplace-tui/main/install.ps1 | iex
+```
+
+**Or via npm (any platform):**
+```bash
+npm install -g github:basaba/copilot-marketplace-tui
+```
+
+Then run:
+```bash
+cpm
 ```
 
 ## Development
 
 ```bash
+npm install
 npm run build          # Compile TypeScript
 npm start              # Run (real copilot CLI integration)
 npm start -- --demo    # Run with demo data
