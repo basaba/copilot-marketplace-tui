@@ -39,6 +39,6 @@ export const SCREENS: Screen[] = [
 export const SCREEN_LABELS: Record<Screen, string> = {
   dashboard: "Dashboard",
   installed: "Installed",
-  marketplace: "Marketplace",
-  settings: "Settings",
+  marketplace: "Browse",
+  settings: "Marketplaces",
 };
