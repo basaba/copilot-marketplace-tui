@@ -47,9 +47,29 @@ if (-not (Get-Command copilot -ErrorAction SilentlyContinue)) {
     }
 }
 
+# Clean up any previous broken install
+$npmGlobal = "$(npm prefix -g 2>$null)\node_modules\copilot-plugin-marketplace"
+if (Test-Path $npmGlobal) {
+    Write-Host "⏳ Removing previous install..." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force $npmGlobal
+}
+
 # Install cpm globally from GitHub
 Write-Host "⏳ Installing cpm from GitHub..." -ForegroundColor Yellow
 npm install -g "github:basaba/copilot-marketplace-tui"
 
-Write-Host ""
-Write-Host "✅ Installed! Run 'cpm' to launch." -ForegroundColor Green
+# Verify cpm is on PATH
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+if (Get-Command cpm -ErrorAction SilentlyContinue) {
+    Write-Host ""
+    Write-Host "✅ Installed! Run 'cpm' to launch." -ForegroundColor Green
+} else {
+    $npmBin = npm prefix -g 2>$null
+    Write-Host ""
+    Write-Host "✅ Installed, but 'cpm' is not on your PATH." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Add npm's global bin directory to your PATH:" -ForegroundColor Yellow
+    Write-Host "  $npmBin" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Then restart your terminal." -ForegroundColor Yellow
+}

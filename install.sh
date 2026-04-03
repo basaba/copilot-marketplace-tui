@@ -52,9 +52,29 @@ if ! command -v copilot &>/dev/null; then
   fi
 fi
 
+# Clean up any previous broken install
+NPM_GLOBAL=$(npm prefix -g 2>/dev/null)/lib/node_modules/copilot-plugin-marketplace
+if [ -e "$NPM_GLOBAL" ]; then
+  echo "⏳ Removing previous install..."
+  rm -rf "$NPM_GLOBAL"
+fi
+
 # Install cpm globally from GitHub
 echo "⏳ Installing cpm from GitHub..."
 npm install -g github:basaba/copilot-marketplace-tui 2>&1
 
-echo ""
-echo "✅ Installed! Run 'cpm' to launch."
+# Verify cpm is on PATH
+if command -v cpm &>/dev/null; then
+  echo ""
+  echo "✅ Installed! Run 'cpm' to launch."
+else
+  NPM_BIN=$(npm bin -g 2>/dev/null || npm prefix -g 2>/dev/null | xargs -I{} echo "{}/bin")
+  echo ""
+  echo "✅ Installed, but 'cpm' is not on your PATH."
+  echo ""
+  echo "Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+  echo ""
+  echo "  export PATH=\"\$PATH:$NPM_BIN\""
+  echo ""
+  echo "Then restart your terminal or run: source ~/.bashrc"
+fi
