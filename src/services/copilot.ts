@@ -268,9 +268,27 @@ export function addMarketplace(spec: string): { success: boolean; message: strin
   }
 }
 
+export async function addMarketplaceAsync(spec: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const out = await runAsync(`copilot plugin marketplace add ${spec}`);
+    return { success: true, message: out || `✓ Added marketplace ${spec}` };
+  } catch (e) {
+    return { success: false, message: `✗ Add marketplace failed: ${e}` };
+  }
+}
+
 export function removeMarketplace(name: string): { success: boolean; message: string } {
   try {
     const out = run(`copilot plugin marketplace remove ${name}`);
+    return { success: true, message: out || `✓ Removed marketplace ${name}` };
+  } catch (e) {
+    return { success: false, message: `✗ Remove marketplace failed: ${e}` };
+  }
+}
+
+export async function removeMarketplaceAsync(name: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const out = await runAsync(`copilot plugin marketplace remove ${name}`);
     return { success: true, message: out || `✓ Removed marketplace ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Remove marketplace failed: ${e}` };

@@ -492,41 +492,46 @@ export default function App() {
           });
         };
         setLoading(`Adding marketplace ${spec}…`);
-        const result = copilot.addMarketplace(spec);
-        setLoading("");
-        if (result.success) {
-          // Re-list marketplaces from CLI to get the correct name
-          copilot.listMarketplacesAsync().then((fresh) => {
-            const existing = new Set(marketplaces.map((m) => m.name));
-            const added = fresh.find((m) => !existing.has(m.name))
-              || fresh.find((m) => m.name === spec || m.url.endsWith(`/${spec}`));
-            if (added && !existing.has(added.name)) {
-              onSuccess(added.name, added.url);
-            } else if (added) {
-              const installedNames = new Set(plugins.map((p) => p.name));
-              copilot.browseMarketplaceAsync(added.name, installedNames, added.url).then((items) => {
-                if (items.length > 0) {
-                  config.persistMarketplacePlugins(added.name, items);
-                  setMpPlugins((prev) => ({ ...prev, [added.name]: items }));
-                }
-              }).catch(() => {
-                showToast(`✗ Failed to browse "${added.name}" — check copilot login`);
-              });
-              showToast(`✓ Refreshed ${added.name}`);
-            } else {
-              // CLI accepted the add but we can't resolve the name — use the
-              // full fresh list instead of guessing from the raw user input.
-              const newOnes = fresh.filter((m) => !existing.has(m.name));
-              if (newOnes.length === 1) {
-                onSuccess(newOnes[0]!.name, newOnes[0]!.url);
+        copilot.addMarketplaceAsync(spec).then((result) => {
+          if (result.success) {
+            // Re-list marketplaces from CLI to get the correct name
+            copilot.listMarketplacesAsync().then((fresh) => {
+              setLoading("");
+              const existing = new Set(marketplaces.map((m) => m.name));
+              const added = fresh.find((m) => !existing.has(m.name))
+                || fresh.find((m) => m.name === spec || m.url.endsWith(`/${spec}`));
+              if (added && !existing.has(added.name)) {
+                onSuccess(added.name, added.url);
+              } else if (added) {
+                const installedNames = new Set(plugins.map((p) => p.name));
+                copilot.browseMarketplaceAsync(added.name, installedNames, added.url).then((items) => {
+                  if (items.length > 0) {
+                    config.persistMarketplacePlugins(added.name, items);
+                    setMpPlugins((prev) => ({ ...prev, [added.name]: items }));
+                  }
+                }).catch(() => {
+                  showToast(`✗ Failed to browse "${added.name}" — check copilot login`);
+                });
+                showToast(`✓ Refreshed ${added.name}`);
+              } else {
+                // CLI accepted the add but we can't resolve the name — use the
+                // full fresh list instead of guessing from the raw user input.
+                const newOnes = fresh.filter((m) => !existing.has(m.name));
+                if (newOnes.length === 1) {
+                  onSuccess(newOnes[0]!.name, newOnes[0]!.url);
               } else {
                 showToast(`✗ Marketplace added but could not resolve name for "${spec}"`);
               }
             }
-          });
-        } else {
+            });
+          } else {
+            setLoading("");
+            showToast(`✗ Add failed: ${spec}`);
+          }
+        }).catch(() => {
+          setLoading("");
           showToast(`✗ Add failed: ${spec}`);
-        }
+        });
         return;
       }
       return;
@@ -691,11 +696,14 @@ export default function App() {
               showToast(`✓ Removed ${mp.name}`);
             };
             setLoading(`Removing ${mp.name}…`);
-            const result = copilot.removeMarketplace(mp.name);
-            setLoading("");
-            if (result.success) onSuccess();
-            else showToast(`✗ Remove failed: ${mp.name}`);
-          }
+            copilot.removeMarketplaceAsync(mp.name).then((result) => {
+              setLoading("");
+              if (result.success) onSuccess();
+              else showToast(`✗ Remove failed: ${mp.name}`);
+            }).catch(() => {
+              setLoading("");
+              showToast(`✗ Remove failed: ${mp.name}`);
+            });          }
         }
         break;
       }
