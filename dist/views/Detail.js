@@ -1,133 +1,34 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { useMemo, useEffect, useState } from "react";
-import { Box, Text } from "ink";
-import { marked } from "marked";
-import { markedTerminal } from "marked-terminal";
+import { useState, useEffect } from "react";
+import { Box, Text, useInput } from "ink";
 import { colors } from "../theme.js";
-import { SearchBar, StatusBar } from "../components/index.js";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let lastTermWidth = 0;
-function configureMarked(width) {
-    if (width !== lastTermWidth) {
-        // account for border (2) + paddingX (2*2) = 6 chars
-        const contentWidth = Math.max(40, width - 8);
-        marked.use(markedTerminal({ width: contentWidth }));
-        lastTermWidth = width;
-    }
-}
+import { StatusBar } from "../components/index.js";
 function isInstalled(p) {
     return "enabled" in p;
 }
 function Field({ label, value, valueColor }) {
     return (_jsxs(Box, { children: [_jsx(Box, { width: 18, children: _jsx(Text, { bold: true, color: colors.accent, children: label }) }), _jsx(Text, { color: valueColor || colors.text, children: value })] }));
 }
-function renderReadme(md, width) {
-    configureMarked(width);
-    return marked.parse(md).trimEnd();
-}
-// Skeleton shimmer placeholder while README loads
-const SHIMMER_WIDTHS = [60, 45, 72, 38, 55, 0, 50, 65, 42, 58, 70, 35, 48, 0, 62, 44];
-const SHIMMER_GRAYS = ["#1a1f28", "#22272e", "#2d333b", "#373e47", "#2d333b", "#22272e"];
-function ShimmerBlock({ lineCount, tick }) {
-    return (_jsx(Box, { flexDirection: "column", borderStyle: "round", borderColor: colors.border, paddingX: 2, paddingY: 1, children: Array.from({ length: lineCount }, (_, i) => {
-            const w = SHIMMER_WIDTHS[i % SHIMMER_WIDTHS.length];
-            if (w === 0)
-                return _jsx(Text, { children: " " }, i);
-            const colorIdx = (i + tick) % SHIMMER_GRAYS.length;
-            return (_jsx(Text, { color: SHIMMER_GRAYS[colorIdx], children: "█".repeat(w) }, i));
-        }) }));
-}
-const ANSI_RE = /\x1B\[[0-9;]*[a-zA-Z]/g;
-// Strip ANSI escape codes for plain-text search matching
-function stripAnsi(str) {
-    return str.replace(ANSI_RE, "");
-}
-// Highlight only matching words inside an ANSI-rich line.
-// Maps plain-text match positions back to the original string.
-function highlightWord(line, query) {
-    const plain = stripAnsi(line);
-    const qLower = query.toLowerCase();
-    const plainLower = plain.toLowerCase();
-    // Collect all match ranges in the *plain* text
-    const ranges = [];
-    let pos = 0;
-    while (pos <= plainLower.length - qLower.length) {
-        const idx = plainLower.indexOf(qLower, pos);
-        if (idx === -1)
-            break;
-        ranges.push([idx, idx + qLower.length]);
-        pos = idx + 1;
-    }
-    if (ranges.length === 0)
-        return line;
-    // Build a map: plainIndex -> originalIndex for each visible char
-    const plainToOrig = [];
-    let pi = 0;
-    for (let i = 0; i < line.length;) {
-        ANSI_RE.lastIndex = i;
-        const m = ANSI_RE.exec(line);
-        if (m && m.index === i) {
-            i += m[0].length;
-        }
-        else {
-            plainToOrig[pi++] = i;
-            i++;
-        }
-    }
-    // Sentinel for slicing up to end
-    plainToOrig[pi] = line.length;
-    // Build result by slicing original string around highlighted ranges
-    let result = "";
-    let lastPlain = 0;
-    for (const [start, end] of ranges) {
-        // Chars before this match (keep original ANSI)
-        result += line.slice(plainToOrig[lastPlain], plainToOrig[start]);
-        // The matched portion with highlight
-        result += `\x1B[43m\x1B[30m${line.slice(plainToOrig[start], plainToOrig[end])}\x1B[0m`;
-        lastPlain = end;
-    }
-    // Remainder after last match
-    result += line.slice(plainToOrig[lastPlain]);
-    return result;
-}
-export default function DetailView({ plugin, source, readme, readmeLoading, termHeight, termWidth = 80, scrollOffset = 0, searchQuery = "", searchActive = false, onSearchChange, onScrollTo, }) {
+export default function DetailView({ plugin, source, termWidth = 80, skills = [], agents = [], capabilitiesLoading = false, }) {
+    const allCapabilities = [...skills, ...agents];
+    const [cursor, setCursor] = useState(0);
+    // Reset cursor when capabilities change (new plugin opened)
+    useEffect(() => {
+        setCursor(0);
+    }, [skills, agents]);
+    useInput((_input, key) => {
+        if (allCapabilities.length === 0)
+            return;
+        if (key.upArrow)
+            setCursor((c) => Math.max(0, c - 1));
+        if (key.downArrow)
+            setCursor((c) => Math.min(allCapabilities.length - 1, c + 1));
+    });
     if (!plugin) {
         return (_jsx(Box, { children: _jsx(Text, { color: colors.textDim, children: "No plugin selected." }) }));
     }
-    // Shimmer animation tick
-    const [shimmerTick, setShimmerTick] = useState(0);
-    useEffect(() => {
-        if (!readmeLoading)
-            return;
-        const id = setInterval(() => setShimmerTick((t) => t + 1), 150);
-        return () => clearInterval(id);
-    }, [readmeLoading]);
-    // Render README lines and find search matches
-    const rendered = useMemo(() => readme ? renderReadme(readme, termWidth) : "", [readme, termWidth]);
-    const lines = useMemo(() => rendered ? rendered.split("\n") : [], [rendered]);
-    const matchLines = useMemo(() => {
-        if (!searchQuery || lines.length === 0)
-            return [];
-        const q = searchQuery.toLowerCase();
-        const matches = [];
-        for (let i = 0; i < lines.length; i++) {
-            if (stripAnsi(lines[i]).toLowerCase().includes(q)) {
-                matches.push(i);
-            }
-        }
-        return matches;
-    }, [searchQuery, lines]);
-    // Auto-scroll to first match when query changes
-    useEffect(() => {
-        if (matchLines.length > 0 && onScrollTo) {
-            onScrollTo(matchLines[0]);
-        }
-    }, [matchLines, onScrollTo]);
-    const helpItems = source === "installed"
+    const baseHelp = source === "installed"
         ? [
-            { key: "↑/↓", desc: "scroll" },
-            { key: "/", desc: "find" },
-            { key: "n/N", desc: "next/prev" },
             { key: "e", desc: "enable" },
             { key: "d", desc: "disable" },
             { key: "u", desc: "update" },
@@ -135,38 +36,17 @@ export default function DetailView({ plugin, source, readme, readmeLoading, term
             { key: "esc", desc: "back" },
         ]
         : [
-            { key: "↑/↓", desc: "scroll" },
-            { key: "/", desc: "find" },
-            { key: "n/N", desc: "next/prev" },
             { key: "i", desc: "install" },
             { key: "esc", desc: "back" },
         ];
-    const viewHeight = termHeight ? Math.max(5, termHeight - (searchActive || searchQuery ? 19 : 17)) : 15;
-    const maxOffset = Math.max(0, lines.length - viewHeight);
-    const offset = Math.min(scrollOffset, maxOffset);
-    // Clamp parent scroll state when it exceeds bounds
-    useEffect(() => {
-        if (lines.length > 0 && scrollOffset > maxOffset && onScrollTo) {
-            onScrollTo(maxOffset);
-        }
-    }, [scrollOffset, maxOffset, lines.length, onScrollTo]);
-    const visible = lines.slice(offset, offset + viewHeight);
-    // Highlight matching words in the visible window
-    const matchSet = new Set(matchLines);
-    const highlightedVisible = visible.map((line, i) => {
-        const lineIdx = offset + i;
-        if (searchQuery && matchSet.has(lineIdx)) {
-            return highlightWord(line, searchQuery);
-        }
-        return line;
-    });
-    const matchInfo = searchQuery && matchLines.length > 0
-        ? (() => {
-            let currentIdx = matchLines.findIndex((l) => l >= offset);
-            if (currentIdx === -1)
-                currentIdx = matchLines.length;
-            return `${currentIdx + 1}/${matchLines.length}`;
-        })()
-        : searchQuery ? "no matches" : "";
-    return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: colors.border, paddingX: 2, paddingY: 1, gap: 0, children: [_jsx(Field, { label: "Name", value: plugin.name }), _jsx(Field, { label: "Version", value: plugin.version }), _jsx(Field, { label: "Marketplace", value: plugin.marketplace }), "description" in plugin && plugin.description && (_jsx(Field, { label: "Description", value: plugin.description })), isInstalled(plugin) && (_jsxs(_Fragment, { children: [_jsx(Field, { label: "Status", value: plugin.enabled ? "● Enabled" : "○ Disabled", valueColor: plugin.enabled ? colors.success : colors.danger }), _jsx(Field, { label: "Update", value: plugin.updateAvailable ? "⬆ Update available" : "Up to date", valueColor: plugin.updateAvailable ? colors.warning : colors.success })] })), !isInstalled(plugin) && (_jsx(Field, { label: "Installed", value: plugin.installed ? "✓ Yes" : "✗ No", valueColor: plugin.installed ? colors.success : colors.textDim }))] }), (searchActive || searchQuery) && (_jsxs(Box, { gap: 1, children: [_jsx(SearchBar, { value: searchQuery, onChange: onSearchChange || (() => { }), placeholder: "Find in README...", active: searchActive }), matchInfo && (_jsx(Text, { color: matchLines.length > 0 ? colors.accent : colors.danger, children: matchInfo }))] })), readmeLoading && (_jsx(ShimmerBlock, { lineCount: viewHeight, tick: shimmerTick })), !readmeLoading && readme && lines.length > 0 && (_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: colors.border, paddingX: 2, paddingY: 1, overflow: "hidden", children: [_jsx(Text, { children: highlightedVisible.join("\n") }), lines.length > viewHeight && (_jsxs(Text, { color: colors.textDim, children: [" ", "lines ", offset + 1, "\u2013", Math.min(offset + viewHeight, lines.length), " of ", lines.length] }))] })), _jsx(StatusBar, { items: helpItems })] }));
+    const helpItems = allCapabilities.length > 0
+        ? [{ key: "↑/↓", desc: "select" }, ...baseHelp]
+        : baseHelp;
+    const hasCapabilities = skills.length > 0 || agents.length > 0;
+    const descWidth = Math.max(20, termWidth - 12);
+    const renderCapabilityItem = (cap, globalIdx) => {
+        const selected = cursor === globalIdx;
+        return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { gap: 1, children: [_jsx(Text, { color: selected ? colors.primary : colors.textDim, children: selected ? "›" : " " }), _jsx(Text, { bold: true, color: selected ? colors.primary : colors.text, children: cap.name }), cap.model && (_jsxs(Text, { color: colors.textDim, children: ["[", cap.model, "]"] }))] }), selected && cap.description && (_jsx(Box, { marginLeft: 2, width: descWidth, marginBottom: 1, children: _jsx(Text, { color: colors.textDim, wrap: "wrap", children: cap.description }) }))] }, cap.name));
+    };
+    return (_jsxs(Box, { flexDirection: "column", children: [_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: colors.border, paddingX: 2, paddingY: 1, children: [_jsx(Field, { label: "Name", value: plugin.name }), _jsx(Field, { label: "Version", value: plugin.version }), _jsx(Field, { label: "Marketplace", value: plugin.marketplace }), "description" in plugin && plugin.description && (_jsx(Field, { label: "Description", value: plugin.description })), isInstalled(plugin) && (_jsxs(_Fragment, { children: [_jsx(Field, { label: "Status", value: plugin.enabled ? "● Enabled" : "○ Disabled", valueColor: plugin.enabled ? colors.success : colors.danger }), _jsx(Field, { label: "Update", value: plugin.updateAvailable ? "⬆ Update available" : "Up to date", valueColor: plugin.updateAvailable ? colors.warning : colors.success })] })), !isInstalled(plugin) && (_jsx(Field, { label: "Installed", value: plugin.installed ? "✓ Yes" : "✗ No", valueColor: plugin.installed ? colors.success : colors.textDim }))] }), capabilitiesLoading && (_jsx(Box, { paddingX: 2, paddingY: 1, children: _jsx(Text, { color: colors.textDim, children: "Loading capabilities..." }) })), !capabilitiesLoading && hasCapabilities && (_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: colors.border, paddingX: 2, paddingY: 1, gap: 1, children: [skills.length > 0 && (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, color: colors.accent, children: "Skills" }), skills.map((cap, i) => renderCapabilityItem(cap, i))] })), agents.length > 0 && (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, color: colors.accent, children: "Agents" }), agents.map((cap, i) => renderCapabilityItem(cap, skills.length + i))] }))] })), !capabilitiesLoading && !hasCapabilities && (_jsx(Box, { paddingX: 2, paddingY: 1, children: _jsx(Text, { color: colors.textDim, children: "No skills or agents defined." }) })), _jsx(StatusBar, { items: helpItems })] }));
 }

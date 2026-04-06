@@ -1,3 +1,9 @@
+export interface PluginCapability {
+    name: string;
+    description: string;
+    model?: string;
+    tools?: string;
+}
 export interface InstalledPlugin {
     name: string;
     version: string;

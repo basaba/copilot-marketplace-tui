@@ -2,15 +2,11 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
 import Spinner from "ink-spinner";
-import { marked } from "marked";
-import { markedTerminal } from "marked-terminal";
 import { TabBar } from "./components/index.js";
 import { Dashboard, InstalledView, MarketplaceView, DetailView, SettingsView, } from "./views/index.js";
 import { filterPlugins as filterInstalled, INSTALLED_CHROME } from "./views/Installed.js";
 import { filterPlugins as filterMarketplace, MARKETPLACE_CHROME } from "./views/Marketplace.js";
 import { copilot, config } from "./services/index.js";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-marked.use(markedTerminal());
 function computeSummary(plugins, marketplaces) {
     return {
         totalInstalled: plugins.length,
@@ -68,33 +64,30 @@ export default function App() {
     const [screen, setScreen] = useState("dashboard");
     const [detail, setDetail] = useState(null);
     const [showDetail, setShowDetail] = useState(false);
-    const [detailReadme, setDetailReadme] = useState(null);
-    const [detailReadmeLoading, setDetailReadmeLoading] = useState(false);
-    const [detailScroll, setDetailScroll] = useState(0);
-    const [detailSearchActive, setDetailSearchActive] = useState(false);
-    const [detailSearchQuery, setDetailSearchQuery] = useState("");
-    // Fetch README when detail view opens
+    const [detailSkills, setDetailSkills] = useState([]);
+    const [detailAgents, setDetailAgents] = useState([]);
+    const [detailCapabilitiesLoading, setDetailCapabilitiesLoading] = useState(false);
+    // Fetch capabilities when detail view opens
     useEffect(() => {
         if (!showDetail || !detail) {
-            setDetailReadme(null);
-            setDetailScroll(0);
-            setDetailSearchActive(false);
-            setDetailSearchQuery("");
+            setDetailSkills([]);
+            setDetailAgents([]);
+            setDetailCapabilitiesLoading(false);
             return;
         }
         const pluginName = detail.plugin.name;
         const url = detail.marketplaceUrl;
         if (!url)
             return;
-        setDetailReadme(null);
-        setDetailReadmeLoading(true);
-        setDetailScroll(0);
-        copilot.fetchPluginReadmeAsync(pluginName, url).then((md) => {
-            setDetailReadme(md);
-            setDetailReadmeLoading(false);
+        setDetailSkills([]);
+        setDetailAgents([]);
+        setDetailCapabilitiesLoading(true);
+        copilot.fetchPluginCapabilitiesAsync(pluginName, url).then(({ skills, agents }) => {
+            setDetailSkills(skills);
+            setDetailAgents(agents);
+            setDetailCapabilitiesLoading(false);
         }).catch(() => {
-            setDetailReadme(null);
-            setDetailReadmeLoading(false);
+            setDetailCapabilitiesLoading(false);
         });
     }, [showDetail, detail]);
     // Cursors per screen
@@ -268,69 +261,8 @@ export default function App() {
             return;
         // Detail view keybindings
         if (showDetail) {
-            // Search input mode
-            if (detailSearchActive) {
-                if (key.escape) {
-                    setDetailSearchActive(false);
-                    return;
-                }
-                if (key.return) {
-                    setDetailSearchActive(false);
-                    return;
-                }
-                // Let TextInput handle the rest via onSearchChange
-                return;
-            }
             if (key.escape) {
-                if (detailSearchQuery) {
-                    setDetailSearchQuery("");
-                }
-                else {
-                    setShowDetail(false);
-                }
-                return;
-            }
-            if (key.upArrow) {
-                setDetailScroll((s) => Math.max(0, s - 1));
-                return;
-            }
-            if (key.downArrow) {
-                setDetailScroll((s) => s + 1);
-                return;
-            }
-            if (key.pageUp || input === "b") {
-                setDetailScroll((s) => Math.max(0, s - (termHeight - 16)));
-                return;
-            }
-            if (key.pageDown || input === " ") {
-                setDetailScroll((s) => s + (termHeight - 16));
-                return;
-            }
-            if (input === "/") {
-                setDetailSearchActive(true);
-                return;
-            }
-            // n/N: jump to next/prev search match
-            if ((input === "n" || input === "N") && detailSearchQuery && detailReadme) {
-                const rendered = marked.parse(detailReadme).trimEnd();
-                const lines = rendered.split("\n");
-                const q = detailSearchQuery.toLowerCase();
-                const matchIdxs = [];
-                for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "").toLowerCase().includes(q)) {
-                        matchIdxs.push(i);
-                    }
-                }
-                if (matchIdxs.length > 0) {
-                    if (input === "n") {
-                        const next = matchIdxs.find((l) => l > detailScroll) ?? matchIdxs[0];
-                        setDetailScroll(next);
-                    }
-                    else {
-                        const prev = [...matchIdxs].reverse().find((l) => l < detailScroll) ?? matchIdxs[matchIdxs.length - 1];
-                        setDetailScroll(prev);
-                    }
-                }
+                setShowDetail(false);
                 return;
             }
             if (detail?.source === "installed") {
@@ -687,7 +619,7 @@ export default function App() {
     });
     const renderScreen = () => {
         if (showDetail) {
-            return (_jsx(DetailView, { plugin: detail?.plugin || null, source: detail?.source || "installed", readme: detailReadme, readmeLoading: detailReadmeLoading, termHeight: termHeight, termWidth: termWidth, scrollOffset: detailScroll, searchQuery: detailSearchQuery, searchActive: detailSearchActive, onSearchChange: setDetailSearchQuery, onScrollTo: setDetailScroll }));
+            return (_jsx(DetailView, { plugin: detail?.plugin || null, source: detail?.source || "installed", termWidth: termWidth, skills: detailSkills, agents: detailAgents, capabilitiesLoading: detailCapabilitiesLoading }));
         }
         switch (screen) {
             case "dashboard":

@@ -3,6 +3,7 @@ import type {
   InstalledPlugin,
   MarketplacePlugin,
   Marketplace,
+  PluginCapability,
 } from "../types.js";
 
 function run(cmd: string): string {
@@ -23,7 +24,9 @@ function runAsync(cmd: string): Promise<string> {
 }
 
 function ghApi(endpoint: string, jq?: string): Promise<string> {
-  const jqArg = jq ? ` --jq '${jq}'` : "";
+  // Use double-quoted jq arg (single quotes don't work in Windows cmd.exe).
+  // Escape any literal double quotes inside the filter.
+  const jqArg = jq ? ` --jq "${jq.replace(/"/g, '\\"')}"` : "";
   return runAsync(`gh api ${endpoint}${jqArg}`);
 }
 
@@ -307,4 +310,85 @@ export async function fetchPluginReadmeAsync(
     ".content",
   );
   return Buffer.from(raw.replace(/\n/g, ""), "base64").toString("utf-8");
+}
+
+function parseFrontmatter(content: string): { description?: string; model?: string; tools?: string } {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const fm = match[1]!;
+  // Handle both quoted and unquoted description values
+  const descQuoted = fm.match(/^description:\s*"((?:[^"\\]|\\.)*)"/m);
+  const descPlain = fm.match(/^description:\s*(.+)$/m);
+  const modelMatch = fm.match(/^model:\s*(.+)$/m);
+  const toolsMatch = fm.match(/^tools:\s*(.+)$/m);
+  return {
+    description: descQuoted
+      ? descQuoted[1]!.replace(/\\"/g, '"').trim()
+      : descPlain ? descPlain[1]!.trim() : undefined,
+    model: modelMatch ? modelMatch[1]!.trim() : undefined,
+    tools: toolsMatch ? toolsMatch[1]!.trim() : undefined,
+  };
+}
+
+async function fetchFileContent(repo: string, path: string): Promise<string> {
+  const raw = await ghApi(`repos/${repo}/contents/${path}`, ".content");
+  return Buffer.from(raw.replace(/\n/g, ""), "base64").toString("utf-8");
+}
+
+/** Fetch a plugin's available skills and agents with descriptions. */
+export async function fetchPluginCapabilitiesAsync(
+  pluginName: string,
+  marketplaceUrl: string,
+): Promise<{ skills: PluginCapability[]; agents: PluginCapability[] }> {
+  const repo = repoFromUrl(marketplaceUrl);
+  if (!repo) return { skills: [], agents: [] };
+
+  const fetchSkills = async (): Promise<PluginCapability[]> => {
+    try {
+      const raw = await ghApi(
+        `repos/${repo}/contents/plugins/${pluginName}/skills`,
+        '[.[] | select(.type == "dir") | .name]',
+      );
+      const dirs: string[] = JSON.parse(raw);
+      return Promise.all(
+        dirs.map(async (dir) => {
+          try {
+            const content = await fetchFileContent(repo, `plugins/${pluginName}/skills/${dir}/SKILL.md`);
+            const fm = parseFrontmatter(content);
+            return { name: dir, description: fm.description || "", model: fm.model, tools: fm.tools };
+          } catch {
+            return { name: dir, description: "" };
+          }
+        }),
+      );
+    } catch {
+      return [];
+    }
+  };
+
+  const fetchAgents = async (): Promise<PluginCapability[]> => {
+    try {
+      const raw = await ghApi(
+        `repos/${repo}/contents/plugins/${pluginName}/agents`,
+        '[.[] | select(.type == "file") | .name]',
+      );
+      const files: string[] = JSON.parse(raw);
+      return Promise.all(
+        files.map(async (file) => {
+          try {
+            const content = await fetchFileContent(repo, `plugins/${pluginName}/agents/${file}`);
+            const fm = parseFrontmatter(content);
+            return { name: file.replace(/\.(md|yml|yaml)$/i, ""), description: fm.description || "", model: fm.model, tools: fm.tools };
+          } catch {
+            return { name: file.replace(/\.(md|yml|yaml)$/i, ""), description: "" };
+          }
+        }),
+      );
+    } catch {
+      return [];
+    }
+  };
+
+  const [skills, agents] = await Promise.all([fetchSkills(), fetchAgents()]);
+  return { skills, agents };
 }

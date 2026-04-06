@@ -1,4 +1,4 @@
-import type { InstalledPlugin, MarketplacePlugin, Marketplace } from "../types.js";
+import type { InstalledPlugin, MarketplacePlugin, Marketplace, PluginCapability } from "../types.js";
 export declare function listInstalled(): InstalledPlugin[];
 export declare function listInstalledAsync(): Promise<InstalledPlugin[]>;
 export declare function listMarketplaces(): Marketplace[];
@@ -64,3 +64,8 @@ export declare function removeMarketplaceAsync(name: string): Promise<{
 }>;
 /** Fetch a plugin's README.md from its marketplace repo via gh API. */
 export declare function fetchPluginReadmeAsync(pluginName: string, marketplaceUrl: string): Promise<string>;
+/** Fetch a plugin's available skills and agents with descriptions. */
+export declare function fetchPluginCapabilitiesAsync(pluginName: string, marketplaceUrl: string): Promise<{
+    skills: PluginCapability[];
+    agents: PluginCapability[];
+}>;
