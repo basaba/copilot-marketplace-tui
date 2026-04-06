@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# gh-cpm — GitHub CLI extension entry point (macOS / Linux)
+# Install: gh extension install basaba/copilot-marketplace-tui
+# Usage:   gh cpm
+set -e
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$DIR"
+
+# Ensure Node.js is available
+if ! command -v node &>/dev/null; then
+  echo "Error: Node.js is required but not found. Install it from https://nodejs.org" >&2
+  exit 1
+fi
+
+# Install npm dependencies on first run (or after upgrade)
+if [ ! -d "$DIR/node_modules" ]; then
+  echo "Installing dependencies…" >&2
+  npm install --omit=dev --silent 2>/dev/null
+fi
+
+# Compile TypeScript if dist is missing
+if [ ! -f "$DIR/dist/index.js" ]; then
+  echo "Building…" >&2
+  npx --yes tsc 2>/dev/null
+fi
+
+exec node "$DIR/dist/index.js" "$@"

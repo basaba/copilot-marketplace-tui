@@ -20,27 +20,65 @@ Built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs) and TypeS
 - GitHub CLI (`gh`) installed and authenticated
 - GitHub Copilot CLI installed and configured (`copilot` binary in PATH)
 
-## Install
+## Install as GitHub CLI Extension (Recommended)
 
-**macOS / Linux:**
+The recommended way to use CPM is as a **GitHub CLI extension**. This integrates it directly into the `gh` command so you can manage Copilot plugins alongside your other GitHub workflows.
+
+```bash
+gh extension install basaba/copilot-marketplace-tui
+```
+
+Then launch it with:
+
+```bash
+gh cpm
+```
+
+> **How it works:** On first run the extension installs npm dependencies and compiles TypeScript automatically — no extra setup required. Subsequent launches start instantly.
+
+To upgrade:
+
+```bash
+gh extension upgrade cpm
+```
+
+To remove:
+
+```bash
+gh extension remove cpm
+```
+
+### Alternative install methods
+
+<details>
+<summary><strong>macOS / Linux (curl)</strong></summary>
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/basaba/copilot-marketplace-tui/main/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+Then run: `cpm`
+</details>
+
+<details>
+<summary><strong>Windows (PowerShell)</strong></summary>
+
 ```powershell
 irm https://raw.githubusercontent.com/basaba/copilot-marketplace-tui/main/install.ps1 | iex
 ```
 
-**Or via npm (any platform):**
+Then run: `cpm`
+</details>
+
+<details>
+<summary><strong>npm (any platform)</strong></summary>
+
 ```bash
 npm install -g github:basaba/copilot-marketplace-tui
 ```
 
-Then run:
-```bash
-cpm
-```
+Then run: `cpm`
+</details>
 
 ## Development
 

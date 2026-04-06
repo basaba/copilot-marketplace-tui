@@ -47,6 +47,22 @@ if (-not (Get-Command copilot -ErrorAction SilentlyContinue)) {
     }
 }
 
+# --- Prefer gh extension install (recommended) ---
+Write-Host ""
+Write-Host "📦 Installing as GitHub CLI extension (recommended)..." -ForegroundColor Cyan
+try {
+    gh extension install basaba/copilot-marketplace-tui 2>$null
+    Write-Host ""
+    Write-Host "✅ Installed! Run 'gh cpm' to launch." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "   Upgrade later with:  gh extension upgrade cpm" -ForegroundColor Cyan
+    Write-Host "   Remove with:         gh extension remove cpm" -ForegroundColor Cyan
+    exit 0
+} catch {
+    Write-Host "⚠ gh extension install failed — falling back to npm global install." -ForegroundColor Yellow
+}
+
+# --- Fallback: npm global install ---
 # Clean up any previous broken install
 $npmGlobal = "$(npm prefix -g 2>$null)\node_modules\copilot-plugin-marketplace"
 if (Test-Path $npmGlobal) {
@@ -76,6 +92,10 @@ $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";"
 if (Get-Command cpm -ErrorAction SilentlyContinue) {
     Write-Host ""
     Write-Host "✅ Installed! Run 'cpm' to launch." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "💡 Tip: You can also install as a gh extension for tighter integration:" -ForegroundColor Cyan
+    Write-Host "   gh extension install basaba/copilot-marketplace-tui" -ForegroundColor Cyan
+    Write-Host "   gh cpm" -ForegroundColor Cyan
 } else {
     Write-Host ""
     Write-Host "✅ Installed, but 'cpm' is not on your PATH." -ForegroundColor Yellow

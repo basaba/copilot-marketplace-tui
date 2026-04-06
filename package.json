@@ -4,10 +4,13 @@
   "description": "A rich terminal UI for managing GitHub Copilot CLI plugins. Browse marketplaces, install/uninstall plugins, enable/disable, update, and configure — all from a beautiful TUI.",
   "main": "dist/index.js",
   "bin": {
-    "cpm": "dist/index.js"
+    "cpm": "dist/index.js",
+    "gh-cpm": "dist/index.js"
   },
   "files": [
     "dist",
+    "gh-cpm",
+    "gh-cpm.bat",
     "README.md"
   ],
   "scripts": {

@@ -52,6 +52,21 @@ if ! command -v copilot &>/dev/null; then
   fi
 fi
 
+# --- Prefer gh extension install (recommended) ---
+echo ""
+echo "📦 Installing as GitHub CLI extension (recommended)..."
+if gh extension install basaba/copilot-marketplace-tui 2>/dev/null; then
+  echo ""
+  echo "✅ Installed! Run 'gh cpm' to launch."
+  echo ""
+  echo "   Upgrade later with:  gh extension upgrade cpm"
+  echo "   Remove with:         gh extension remove cpm"
+  exit 0
+fi
+
+echo "⚠ gh extension install failed — falling back to npm global install."
+
+# --- Fallback: npm global install ---
 # Clean up any previous broken install
 NPM_GLOBAL=$(npm prefix -g 2>/dev/null)/lib/node_modules/copilot-plugin-marketplace
 if [ -e "$NPM_GLOBAL" ]; then
@@ -81,6 +96,10 @@ hash -r 2>/dev/null  # refresh shell command cache
 if command -v cpm &>/dev/null; then
   echo ""
   echo "✅ Installed! Run 'cpm' to launch."
+  echo ""
+  echo "💡 Tip: You can also install as a gh extension for tighter integration:"
+  echo "   gh extension install basaba/copilot-marketplace-tui"
+  echo "   gh cpm"
 else
   echo ""
   echo "✅ Installed, but 'cpm' is not on your PATH."
