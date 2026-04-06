@@ -15,13 +15,13 @@ fi
 
 # Install npm dependencies on first run (or after upgrade)
 if [ ! -d "$DIR/node_modules" ]; then
-  echo "Installing dependencies…" >&2
+  echo "Installing dependencies..." >&2
   npm install --omit=dev --silent 2>/dev/null
 fi
 
 # Compile TypeScript if dist is missing
 if [ ! -f "$DIR/dist/index.js" ]; then
-  echo "Building…" >&2
+  echo "Building..." >&2
   npx --yes tsc 2>/dev/null
 fi
 
