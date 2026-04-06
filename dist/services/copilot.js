@@ -1,4 +1,29 @@
 import { execSync, exec } from "node:child_process";
+/**
+ * Resolve the Copilot CLI command to use for plugin management.
+ *
+ * Preference order:
+ *   1. `gh copilot` — tight integration with the GitHub CLI ecosystem;
+ *      always available when running as a `gh` extension.
+ *   2. `copilot`   — standalone binary; kept as a fallback so the tool
+ *      continues to work outside of a `gh` context.
+ *
+ * The result is cached after the first call so every subsequent command
+ * pays no extra process-spawn cost.
+ */
+let _copilotCmd = null;
+function copilotCmd() {
+    if (_copilotCmd !== null)
+        return _copilotCmd;
+    try {
+        execSync("gh copilot --version", { stdio: "ignore", timeout: 2000 });
+        _copilotCmd = "gh copilot";
+    }
+    catch {
+        _copilotCmd = "copilot";
+    }
+    return _copilotCmd;
+}
 function run(cmd) {
     try {
         return execSync(cmd, { encoding: "utf-8", timeout: 30000 }).trim();
@@ -31,11 +56,11 @@ function repoFromUrl(url) {
 //     • workiq@copilot-plugins (v1.0.0)
 //     • docker@awesome-copilot (v2.0.0) [disabled]
 export function listInstalled() {
-    const out = run("copilot plugin list");
+    const out = run(`${copilotCmd()} plugin list`);
     return parseInstalled(out);
 }
 export async function listInstalledAsync() {
-    const out = await runAsync("copilot plugin list");
+    const out = await runAsync(`${copilotCmd()} plugin list`);
     return parseInstalled(out);
 }
 function parseInstalled(out) {
@@ -64,11 +89,11 @@ function parseInstalled(out) {
 //   📦 User-added:
 //     ◆ my-marketplace (GitHub: user/my-marketplace)
 export function listMarketplaces() {
-    const out = run("copilot plugin marketplace list");
+    const out = run(`${copilotCmd()} plugin marketplace list`);
     return parseMarketplaces(out);
 }
 export async function listMarketplacesAsync() {
-    const out = await runAsync("copilot plugin marketplace list");
+    const out = await runAsync(`${copilotCmd()} plugin marketplace list`);
     return parseMarketplaces(out);
 }
 function parseMarketplaces(out) {
@@ -99,12 +124,12 @@ export async function browseMarketplaceAsync(name, installedNames, url) {
             // fall through to CLI
         }
     }
-    const out = await runAsync(`copilot plugin marketplace browse ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin marketplace browse ${name}`);
     return parseBrowse(out, name, installedNames);
 }
 /** Backfill descriptions using copilot CLI (returns full name+desc list). */
 export async function fetchDescriptionsAsync(name, installedNames) {
-    const out = await runAsync(`copilot plugin marketplace browse ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin marketplace browse ${name}`);
     return parseBrowse(out, name, installedNames);
 }
 async function browseViaGhApi(marketplace, url, installedNames) {
@@ -143,7 +168,7 @@ function parseBrowse(out, marketplace, installedNames) {
 }
 export function installPlugin(name) {
     try {
-        const out = run(`copilot plugin install ${name}`);
+        const out = run(`${copilotCmd()} plugin install ${name}`);
         return { success: true, message: out || `✓ Installed ${name}` };
     }
     catch (e) {
@@ -152,7 +177,7 @@ export function installPlugin(name) {
 }
 export async function installPluginAsync(name) {
     try {
-        const out = await runAsync(`copilot plugin install ${name}`);
+        const out = await runAsync(`${copilotCmd()} plugin install ${name}`);
         return { success: true, message: out || `✓ Installed ${name}` };
     }
     catch (e) {
@@ -161,7 +186,7 @@ export async function installPluginAsync(name) {
 }
 export function uninstallPlugin(name) {
     try {
-        const out = run(`copilot plugin uninstall ${name}`);
+        const out = run(`${copilotCmd()} plugin uninstall ${name}`);
         return { success: true, message: out || `✓ Uninstalled ${name}` };
     }
     catch (e) {
@@ -170,7 +195,7 @@ export function uninstallPlugin(name) {
 }
 export async function uninstallPluginAsync(name) {
     try {
-        const out = await runAsync(`copilot plugin uninstall ${name}`);
+        const out = await runAsync(`${copilotCmd()} plugin uninstall ${name}`);
         return { success: true, message: out || `✓ Uninstalled ${name}` };
     }
     catch (e) {
@@ -179,7 +204,7 @@ export async function uninstallPluginAsync(name) {
 }
 export function enablePlugin(name) {
     try {
-        const out = run(`copilot plugin enable ${name}`);
+        const out = run(`${copilotCmd()} plugin enable ${name}`);
         return { success: true, message: out || `✓ Enabled ${name}` };
     }
     catch (e) {
@@ -188,7 +213,7 @@ export function enablePlugin(name) {
 }
 export async function enablePluginAsync(name) {
     try {
-        const out = await runAsync(`copilot plugin enable ${name}`);
+        const out = await runAsync(`${copilotCmd()} plugin enable ${name}`);
         return { success: true, message: out || `✓ Enabled ${name}` };
     }
     catch (e) {
@@ -197,7 +222,7 @@ export async function enablePluginAsync(name) {
 }
 export function disablePlugin(name) {
     try {
-        const out = run(`copilot plugin disable ${name}`);
+        const out = run(`${copilotCmd()} plugin disable ${name}`);
         return { success: true, message: out || `✓ Disabled ${name}` };
     }
     catch (e) {
@@ -206,7 +231,7 @@ export function disablePlugin(name) {
 }
 export async function disablePluginAsync(name) {
     try {
-        const out = await runAsync(`copilot plugin disable ${name}`);
+        const out = await runAsync(`${copilotCmd()} plugin disable ${name}`);
         return { success: true, message: out || `✓ Disabled ${name}` };
     }
     catch (e) {
@@ -215,7 +240,7 @@ export async function disablePluginAsync(name) {
 }
 export function updatePlugin(name) {
     try {
-        const out = run(`copilot plugin update ${name}`);
+        const out = run(`${copilotCmd()} plugin update ${name}`);
         return { success: true, message: out || `✓ Updated ${name}` };
     }
     catch (e) {
@@ -224,7 +249,7 @@ export function updatePlugin(name) {
 }
 export async function updatePluginAsync(name) {
     try {
-        const out = await runAsync(`copilot plugin update ${name}`);
+        const out = await runAsync(`${copilotCmd()} plugin update ${name}`);
         return { success: true, message: out || `✓ Updated ${name}` };
     }
     catch (e) {
@@ -233,7 +258,7 @@ export async function updatePluginAsync(name) {
 }
 export function addMarketplace(spec) {
     try {
-        const out = run(`copilot plugin marketplace add ${spec}`);
+        const out = run(`${copilotCmd()} plugin marketplace add ${spec}`);
         return { success: true, message: out || `✓ Added marketplace ${spec}` };
     }
     catch (e) {
@@ -242,7 +267,7 @@ export function addMarketplace(spec) {
 }
 export async function addMarketplaceAsync(spec) {
     try {
-        const out = await runAsync(`copilot plugin marketplace add ${spec}`);
+        const out = await runAsync(`${copilotCmd()} plugin marketplace add ${spec}`);
         return { success: true, message: out || `✓ Added marketplace ${spec}` };
     }
     catch (e) {
@@ -251,7 +276,7 @@ export async function addMarketplaceAsync(spec) {
 }
 export function removeMarketplace(name) {
     try {
-        const out = run(`copilot plugin marketplace remove ${name}`);
+        const out = run(`${copilotCmd()} plugin marketplace remove ${name}`);
         return { success: true, message: out || `✓ Removed marketplace ${name}` };
     }
     catch (e) {
@@ -260,7 +285,7 @@ export function removeMarketplace(name) {
 }
 export async function removeMarketplaceAsync(name) {
     try {
-        const out = await runAsync(`copilot plugin marketplace remove ${name}`);
+        const out = await runAsync(`${copilotCmd()} plugin marketplace remove ${name}`);
         return { success: true, message: out || `✓ Removed marketplace ${name}` };
     }
     catch (e) {

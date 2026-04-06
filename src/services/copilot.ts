@@ -5,6 +5,31 @@ import type {
   Marketplace,
 } from "../types.js";
 
+/**
+ * Resolve the Copilot CLI command to use for plugin management.
+ *
+ * Preference order:
+ *   1. `gh copilot` — tight integration with the GitHub CLI ecosystem;
+ *      always available when running as a `gh` extension.
+ *   2. `copilot`   — standalone binary; kept as a fallback so the tool
+ *      continues to work outside of a `gh` context.
+ *
+ * The result is cached after the first call so every subsequent command
+ * pays no extra process-spawn cost.
+ */
+let _copilotCmd: string | null = null;
+
+function copilotCmd(): string {
+  if (_copilotCmd !== null) return _copilotCmd;
+  try {
+    execSync("gh copilot --version", { stdio: "ignore", timeout: 2000 });
+    _copilotCmd = "gh copilot";
+  } catch {
+    _copilotCmd = "copilot";
+  }
+  return _copilotCmd;
+}
+
 function run(cmd: string): string {
   try {
     return execSync(cmd, { encoding: "utf-8", timeout: 30000 }).trim();
@@ -38,12 +63,12 @@ function repoFromUrl(url: string): string | null {
 //     • workiq@copilot-plugins (v1.0.0)
 //     • docker@awesome-copilot (v2.0.0) [disabled]
 export function listInstalled(): InstalledPlugin[] {
-  const out = run("copilot plugin list");
+  const out = run(`${copilotCmd()} plugin list`);
   return parseInstalled(out);
 }
 
 export async function listInstalledAsync(): Promise<InstalledPlugin[]> {
-  const out = await runAsync("copilot plugin list");
+  const out = await runAsync(`${copilotCmd()} plugin list`);
   return parseInstalled(out);
 }
 
@@ -73,12 +98,12 @@ function parseInstalled(out: string): InstalledPlugin[] {
 //   📦 User-added:
 //     ◆ my-marketplace (GitHub: user/my-marketplace)
 export function listMarketplaces(): Marketplace[] {
-  const out = run("copilot plugin marketplace list");
+  const out = run(`${copilotCmd()} plugin marketplace list`);
   return parseMarketplaces(out);
 }
 
 export async function listMarketplacesAsync(): Promise<Marketplace[]> {
-  const out = await runAsync("copilot plugin marketplace list");
+  const out = await runAsync(`${copilotCmd()} plugin marketplace list`);
   return parseMarketplaces(out);
 }
 
@@ -113,7 +138,7 @@ export async function browseMarketplaceAsync(
       // fall through to CLI
     }
   }
-  const out = await runAsync(`copilot plugin marketplace browse ${name}`);
+  const out = await runAsync(`${copilotCmd()} plugin marketplace browse ${name}`);
   return parseBrowse(out, name, installedNames);
 }
 
@@ -122,7 +147,7 @@ export async function fetchDescriptionsAsync(
   name: string,
   installedNames: Set<string>,
 ): Promise<MarketplacePlugin[]> {
-  const out = await runAsync(`copilot plugin marketplace browse ${name}`);
+  const out = await runAsync(`${copilotCmd()} plugin marketplace browse ${name}`);
   return parseBrowse(out, name, installedNames);
 }
 
@@ -171,7 +196,7 @@ function parseBrowse(out: string, marketplace: string, installedNames: Set<strin
 
 export function installPlugin(name: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin install ${name}`);
+    const out = run(`${copilotCmd()} plugin install ${name}`);
     return { success: true, message: out || `✓ Installed ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Install failed: ${e}` };
@@ -180,7 +205,7 @@ export function installPlugin(name: string): { success: boolean; message: string
 
 export async function installPluginAsync(name: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin install ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin install ${name}`);
     return { success: true, message: out || `✓ Installed ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Install failed: ${e}` };
@@ -189,7 +214,7 @@ export async function installPluginAsync(name: string): Promise<{ success: boole
 
 export function uninstallPlugin(name: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin uninstall ${name}`);
+    const out = run(`${copilotCmd()} plugin uninstall ${name}`);
     return { success: true, message: out || `✓ Uninstalled ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Uninstall failed: ${e}` };
@@ -198,7 +223,7 @@ export function uninstallPlugin(name: string): { success: boolean; message: stri
 
 export async function uninstallPluginAsync(name: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin uninstall ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin uninstall ${name}`);
     return { success: true, message: out || `✓ Uninstalled ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Uninstall failed: ${e}` };
@@ -207,7 +232,7 @@ export async function uninstallPluginAsync(name: string): Promise<{ success: boo
 
 export function enablePlugin(name: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin enable ${name}`);
+    const out = run(`${copilotCmd()} plugin enable ${name}`);
     return { success: true, message: out || `✓ Enabled ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Enable failed: ${e}` };
@@ -216,7 +241,7 @@ export function enablePlugin(name: string): { success: boolean; message: string 
 
 export async function enablePluginAsync(name: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin enable ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin enable ${name}`);
     return { success: true, message: out || `✓ Enabled ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Enable failed: ${e}` };
@@ -225,7 +250,7 @@ export async function enablePluginAsync(name: string): Promise<{ success: boolea
 
 export function disablePlugin(name: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin disable ${name}`);
+    const out = run(`${copilotCmd()} plugin disable ${name}`);
     return { success: true, message: out || `✓ Disabled ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Disable failed: ${e}` };
@@ -234,7 +259,7 @@ export function disablePlugin(name: string): { success: boolean; message: string
 
 export async function disablePluginAsync(name: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin disable ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin disable ${name}`);
     return { success: true, message: out || `✓ Disabled ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Disable failed: ${e}` };
@@ -243,7 +268,7 @@ export async function disablePluginAsync(name: string): Promise<{ success: boole
 
 export function updatePlugin(name: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin update ${name}`);
+    const out = run(`${copilotCmd()} plugin update ${name}`);
     return { success: true, message: out || `✓ Updated ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Update failed: ${e}` };
@@ -252,7 +277,7 @@ export function updatePlugin(name: string): { success: boolean; message: string 
 
 export async function updatePluginAsync(name: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin update ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin update ${name}`);
     return { success: true, message: out || `✓ Updated ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Update failed: ${e}` };
@@ -261,7 +286,7 @@ export async function updatePluginAsync(name: string): Promise<{ success: boolea
 
 export function addMarketplace(spec: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin marketplace add ${spec}`);
+    const out = run(`${copilotCmd()} plugin marketplace add ${spec}`);
     return { success: true, message: out || `✓ Added marketplace ${spec}` };
   } catch (e) {
     return { success: false, message: `✗ Add marketplace failed: ${e}` };
@@ -270,7 +295,7 @@ export function addMarketplace(spec: string): { success: boolean; message: strin
 
 export async function addMarketplaceAsync(spec: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin marketplace add ${spec}`);
+    const out = await runAsync(`${copilotCmd()} plugin marketplace add ${spec}`);
     return { success: true, message: out || `✓ Added marketplace ${spec}` };
   } catch (e) {
     return { success: false, message: `✗ Add marketplace failed: ${e}` };
@@ -279,7 +304,7 @@ export async function addMarketplaceAsync(spec: string): Promise<{ success: bool
 
 export function removeMarketplace(name: string): { success: boolean; message: string } {
   try {
-    const out = run(`copilot plugin marketplace remove ${name}`);
+    const out = run(`${copilotCmd()} plugin marketplace remove ${name}`);
     return { success: true, message: out || `✓ Removed marketplace ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Remove marketplace failed: ${e}` };
@@ -288,7 +313,7 @@ export function removeMarketplace(name: string): { success: boolean; message: st
 
 export async function removeMarketplaceAsync(name: string): Promise<{ success: boolean; message: string }> {
   try {
-    const out = await runAsync(`copilot plugin marketplace remove ${name}`);
+    const out = await runAsync(`${copilotCmd()} plugin marketplace remove ${name}`);
     return { success: true, message: out || `✓ Removed marketplace ${name}` };
   } catch (e) {
     return { success: false, message: `✗ Remove marketplace failed: ${e}` };

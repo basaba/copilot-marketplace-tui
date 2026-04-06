@@ -16,9 +16,8 @@ Built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs) and TypeS
 
 ## Prerequisites
 
+- GitHub CLI (`gh`) installed and authenticated — includes the `gh copilot` extension for plugin management
 - Node.js 18+
-- GitHub CLI (`gh`) installed and authenticated
-- GitHub Copilot CLI installed and configured (`copilot` binary in PATH)
 
 ## Install as GitHub CLI Extension (Recommended)
 
@@ -131,13 +130,13 @@ src/
 
 ## How It Works
 
-CPM wraps the existing `copilot plugin` CLI commands:
+CPM integrates directly with the GitHub Copilot CLI. It auto-detects the available command — preferring `gh copilot` (tighter GitHub CLI integration) and falling back to the standalone `copilot` binary:
 
-- `copilot plugin list` — list installed plugins
-- `copilot plugin install/uninstall` — install/remove plugins
-- `copilot plugin enable/disable` — toggle plugins
-- `copilot plugin update` — update plugins
-- `copilot plugin marketplace list/browse/add/remove` — manage marketplaces
+- `gh copilot plugin list` — list installed plugins
+- `gh copilot plugin install/uninstall` — install/remove plugins
+- `gh copilot plugin enable/disable` — toggle plugins
+- `gh copilot plugin update` — update plugins
+- `gh copilot plugin marketplace list/browse/add/remove` — manage marketplaces
 
 ## Demo Mode
 
